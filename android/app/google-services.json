@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "89507154805",
+    "project_id": "know-your-expenses-35923",
+    "storage_bucket": "know-your-expenses-35923.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:89507154805:android:6cc545ca2f7468e68c213c",
+        "android_client_info": {
+          "package_name": "com.anuj.knowyourexpenses"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGqEiXAbRCyW2e4tttA-i_rOYJvVFmJWY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
