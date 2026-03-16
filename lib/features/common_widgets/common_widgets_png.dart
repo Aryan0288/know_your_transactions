@@ -1,4 +1,4 @@
-class PngImages{
+class PngImages {
   PngImages._();
 
   static const String path = "assets/png";

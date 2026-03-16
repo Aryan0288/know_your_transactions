@@ -1,4 +1,3 @@
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,7 +41,10 @@ class AddExpensePageHomePage extends ConsumerWidget {
                     end: Offset.zero,
                   ).animate(animation),
                   child: ScaleTransition(
-                    scale: Tween<double>(begin: 0.98, end: 1.0).animate(animation),
+                    scale: Tween<double>(
+                      begin: 0.98,
+                      end: 1.0,
+                    ).animate(animation),
                     child: child,
                   ),
                 ),
@@ -60,9 +62,7 @@ class AddExpensePageHomePage extends ConsumerWidget {
         backgroundColor: const Color(0xFF2E8B57),
         shape: const CircleBorder(),
         child: const Icon(Icons.add, color: Colors.white, size: 30),
-        onPressed: () async{
-
-
+        onPressed: () async {
           final user = ref.read(firebaseAuthProvider).currentUser;
 
           if (user == null) {
@@ -70,27 +70,37 @@ class AddExpensePageHomePage extends ConsumerWidget {
             CustomDialogs.showSignInRequiredDialog(
               context,
               onSignInTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => SignInPage()));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => SignInPage()),
+                );
               },
             );
-          }
-          else if (!user.emailVerified) {
+          } else if (!user.emailVerified) {
             await user.reload(); // 🔴 VERY IMPORTANT
             final refreshedUser = FirebaseAuth.instance.currentUser;
             if (refreshedUser!.emailVerified) {
               CustomDialogs.showSignInRequiredDialog(
                 context,
                 onSignInTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => SignInPage()));
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => SignInPage()),
+                  );
                 },
               );
-            }else{
-              Navigator.push(context, MaterialPageRoute(builder: (_) => AddExpensePage()));
+            } else {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => AddExpensePage()),
+              );
             }
-          }
-          else {
+          } else {
             // Logged in + verified
-            Navigator.push(context, MaterialPageRoute(builder: (_) => AddExpensePage()));
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => AddExpensePage()),
+            );
           }
         },
       ),
@@ -113,17 +123,11 @@ class AddExpensePageHomePage extends ConsumerWidget {
   }
 }
 
-
-
 class _BottomNavItem extends ConsumerWidget {
   final int index;
   final IconData icon;
 
-  const _BottomNavItem({
-    super.key,
-    required this.index,
-    required this.icon,
-  });
+  const _BottomNavItem({super.key, required this.index, required this.icon});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -144,8 +148,6 @@ class _BottomNavItem extends ConsumerWidget {
     );
   }
 }
-
-
 
 class DummyPage extends StatelessWidget {
   final String title;

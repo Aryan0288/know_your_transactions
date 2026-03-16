@@ -1,14 +1,16 @@
+import 'package:cloudinary_flutter/cloudinary_context.dart';
+import 'package:cloudinary_url_gen/cloudinary.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'features/home/view/page_home.dart';
 import 'package:firebase_core/firebase_core.dart';
 
-import 'features/login_signup/view/page_enter_otp.dart';
-import 'learning_page.dart';
 
-void main() async{
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  CloudinaryContext.cloudinary =
+      Cloudinary.fromCloudName(cloudName: 'dl0b0wqdk');
   runApp(ProviderScope(child: const MyApp()));
 }
 
@@ -19,19 +21,13 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
-      theme: ThemeData(
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
+      theme: ThemeData(colorScheme: .fromSeed(seedColor: Colors.deepPurple)),
       // home: SignUpPage(),
       home: HomePage(),
       // home: EnterOtpPage(),
     );
   }
 }
-
-
-
-
 
 /*
 

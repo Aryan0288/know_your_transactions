@@ -26,7 +26,10 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('New Category', style: GoogleFonts.manrope(fontWeight: FontWeight.bold)),
+        title: Text(
+          'New Category',
+          style: GoogleFonts.manrope(fontWeight: FontWeight.bold),
+        ),
         content: TextField(
           controller: nameController,
           autofocus: true,
@@ -39,16 +42,23 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: GoogleFonts.manrope(color: Colors.grey)),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.manrope(color: Colors.grey),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF2E8B57),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             onPressed: () async {
               if (nameController.text.isNotEmpty) {
-                await ref.read(transactionViewModelProvider.notifier).addCategory(
+                await ref
+                    .read(transactionViewModelProvider.notifier)
+                    .addCategory(
                       name: nameController.text.trim(),
                       icon: Icons.category,
                       color: Colors.teal,
@@ -65,7 +75,6 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FE),
       appBar: AppBar(
@@ -159,7 +168,11 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                       ),
                       TextButton.icon(
                         onPressed: _showAddCategoryDialog,
-                        icon: const Icon(Icons.add_circle_outline, size: 20, color: Color(0xFF2E8B57)),
+                        icon: const Icon(
+                          Icons.add_circle_outline,
+                          size: 20,
+                          color: Color(0xFF2E8B57),
+                        ),
                         label: Text(
                           'Add New',
                           style: GoogleFonts.manrope(
@@ -174,12 +187,17 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
 
                   // Horizontal Category Scroll
                   Consumer(
-                    builder: (context,ref,child) {
+                    builder: (context, ref, child) {
                       final categoriesAsync = ref.watch(categoriesProvider);
                       return categoriesAsync.when(
                         data: (categories) {
-                          if (selectedCategory == null && categories.isNotEmpty) {
-                            Future.microtask(() => setState(() => selectedCategory = categories.first));
+                          if (selectedCategory == null &&
+                              categories.isNotEmpty) {
+                            Future.microtask(
+                              () => setState(
+                                () => selectedCategory = categories.first,
+                              ),
+                            );
                           }
                           return SizedBox(
                             height: 100,
@@ -188,35 +206,47 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                               itemCount: categories.length,
                               itemBuilder: (context, index) {
                                 final category = categories[index];
-                                final isSelected = selectedCategory?.id == category.id;
+                                final isSelected =
+                                    selectedCategory?.id == category.id;
                                 return GestureDetector(
-                                  onTap: () => setState(() => selectedCategory = category),
+                                  onTap: () => setState(
+                                    () => selectedCategory = category,
+                                  ),
                                   child: AnimatedContainer(
                                     duration: const Duration(milliseconds: 200),
                                     width: 90,
                                     margin: const EdgeInsets.only(right: 12),
                                     decoration: BoxDecoration(
-                                      color: isSelected ? category.color : Colors.white,
+                                      color: isSelected
+                                          ? category.color
+                                          : Colors.white,
                                       borderRadius: BorderRadius.circular(20),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: isSelected ? category.color.withOpacity(0.3) : Colors.black.withOpacity(0.05),
+                                          color: isSelected
+                                              ? category.color.withOpacity(0.3)
+                                              : Colors.black.withOpacity(0.05),
                                           blurRadius: 10,
                                           offset: const Offset(0, 4),
                                         ),
                                       ],
                                     ),
                                     child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       children: [
                                         Icon(
                                           category.icon,
-                                          color: isSelected ? Colors.white : category.color,
+                                          color: isSelected
+                                              ? Colors.white
+                                              : category.color,
                                           size: 28,
                                         ),
                                         const SizedBox(height: 8),
                                         Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 4,
+                                          ),
                                           child: Text(
                                             category.name,
                                             maxLines: 1,
@@ -224,7 +254,9 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                                             style: GoogleFonts.manrope(
                                               fontSize: 12,
                                               fontWeight: FontWeight.w600,
-                                              color: isSelected ? Colors.white : Colors.black87,
+                                              color: isSelected
+                                                  ? Colors.white
+                                                  : Colors.black87,
                                             ),
                                           ),
                                         ),
@@ -236,10 +268,11 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                             ),
                           );
                         },
-                        loading: () => const Center(child: CircularProgressIndicator()),
+                        loading: () =>
+                            const Center(child: CircularProgressIndicator()),
                         error: (e, stack) => Text('Error: $e'),
                       );
-                    }
+                    },
                   ),
 
                   const SizedBox(height: 32),
@@ -295,7 +328,11 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.calendar_today, color: Color(0xFF2E8B57), size: 20),
+                          const Icon(
+                            Icons.calendar_today,
+                            color: Color(0xFF2E8B57),
+                            size: 20,
+                          ),
                           const SizedBox(width: 12),
                           Text(
                             DateFormat('MMMM dd, yyyy').format(selectedDate),
@@ -306,7 +343,11 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                             ),
                           ),
                           const Spacer(),
-                          const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
+                          const Icon(
+                            Icons.arrow_forward_ios,
+                            color: Colors.grey,
+                            size: 16,
+                          ),
                         ],
                       ),
                     ),
@@ -364,40 +405,44 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
             child: SizedBox(
               width: double.infinity,
               child: Consumer(
-                  builder: (context,ref,child) {
-                    final isLoading = ref.watch(transactionViewModelProvider).isLoading;
-                    return elevatedButton(
-                      isLoading: isLoading,
-                      onPressed: () async {
-                        if (amountController.text.isEmpty) {
-                          Utils.showErrorToast(
-                            context,
-                            alignment: Alignment.bottomCenter,
-                            title: "Amount Required",
-                            description: "Please enter the amount spent."
-                          );
-                          return;
-                        }
-                        if (selectedCategory == null) return;
-
-                        final success = await ref.read(transactionViewModelProvider.notifier).addTransaction(
-                          amount: double.tryParse(amountController.text) ?? 0,
-                          description: descriptionController.text,
-                          category: selectedCategory!,
-                          date: selectedDate,
+                builder: (context, ref, child) {
+                  final isLoading = ref
+                      .watch(transactionViewModelProvider)
+                      .isLoading;
+                  return elevatedButton(
+                    isLoading: isLoading,
+                    onPressed: () async {
+                      if (amountController.text.isEmpty) {
+                        Utils.showErrorToast(
+                          context,
+                          alignment: Alignment.bottomCenter,
+                          title: "Amount Required",
+                          description: "Please enter the amount spent.",
                         );
+                        return;
+                      }
+                      if (selectedCategory == null) return;
 
-                        if (success && mounted) {
-                          Utils.showSuccessToast(
-                              context,
-                              title: "Expense Saved Successfully!",
+                      final success = await ref
+                          .read(transactionViewModelProvider.notifier)
+                          .addTransaction(
+                            amount: double.tryParse(amountController.text) ?? 0,
+                            description: descriptionController.text,
+                            category: selectedCategory!,
+                            date: selectedDate,
                           );
-                          Navigator.pop(context);
-                        }
-                      },
-                      title: 'Save Expense',
-                    );
-                  }
+
+                      if (success && mounted) {
+                        Utils.showSuccessToast(
+                          context,
+                          title: "Expense Saved Successfully!",
+                        );
+                        Navigator.pop(context);
+                      }
+                    },
+                    title: 'Save Expense',
+                  );
+                },
               ),
             ),
           ),

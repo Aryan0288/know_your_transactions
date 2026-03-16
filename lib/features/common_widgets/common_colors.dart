@@ -1,4 +1,3 @@
-
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -25,9 +24,9 @@ Color get elevatedBtnBackGroundColor => const Color(0xFF3363FD);
 Color get outlinedBtnForGroundColor => const Color(0xff0461E5);
 Color get disabledColor => Colors.grey;
 
-
 /// Common FontFamily
 String? get manRope => GoogleFonts.manrope().fontFamily;
 String? get manRopeMedium => GoogleFonts.manrope(fontWeight: .w500).fontFamily;
-String? get manRopeSemiBold => GoogleFonts.manrope(fontWeight: .w600).fontFamily;
+String? get manRopeSemiBold =>
+    GoogleFonts.manrope(fontWeight: .w600).fontFamily;
 String? get manRopeBold => GoogleFonts.manrope(fontWeight: .w900).fontFamily;

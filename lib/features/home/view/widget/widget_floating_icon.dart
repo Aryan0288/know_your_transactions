@@ -26,11 +26,7 @@ class FloatingIconBubble extends StatelessWidget {
           ),
         ],
       ),
-      child: Icon(
-        icon,
-        size: 40,
-        color: Colors.white,
-      ),
+      child: Icon(icon, size: 40, color: Colors.white),
     );
   }
 }

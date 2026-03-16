@@ -44,17 +44,27 @@ class SignUpPage extends StatelessWidget {
                   hs(24),
                   commonTextCenterAlign(title: signUp, style: headingTextStyle),
                   hs(8),
-                  commonTextCenterAlign(title: getStarted, style: textStyle_14_400_55555A),
+                  commonTextCenterAlign(
+                    title: getStarted,
+                    style: textStyle_14_400_55555A,
+                  ),
                   hs(20),
                   GoogleSignUpWidget(),
                   hs(20),
                   Row(
                     children: [
-                      Expanded(child: Container(height: 1, color: textColor_72788C)),
+                      Expanded(
+                        child: Container(height: 1, color: textColor_72788C),
+                      ),
                       ws(8),
-                      commonTextCenterAlign(title: or, style: textStyle_14_600_181636),
+                      commonTextCenterAlign(
+                        title: or,
+                        style: textStyle_14_600_181636,
+                      ),
                       ws(8),
-                      Expanded(child: Container(height: 1, color: textColor_72788C)),
+                      Expanded(
+                        child: Container(height: 1, color: textColor_72788C),
+                      ),
                     ],
                   ),
                   hs(32),
@@ -84,7 +94,9 @@ class SignUpPage extends StatelessWidget {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your email';
                             }
-                            final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                            final emailRegex = RegExp(
+                              r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                            );
                             if (!emailRegex.hasMatch(value)) {
                               return 'Please enter a valid email address';
                             }
@@ -136,7 +148,7 @@ class SignUpPage extends StatelessWidget {
           left: 24,
           right: 24,
           bottom: MediaQuery.of(context).viewInsets.bottom > 0
-              ? MediaQuery.of(context).viewInsets.bottom*1.1
+              ? MediaQuery.of(context).viewInsets.bottom * 1.1
               : 24,
           top: 12,
         ),
@@ -149,17 +161,21 @@ class SignUpPage extends StatelessWidget {
                 return elevatedButton(
                   onPressed: () async {
                     if (_formKey.currentState!.validate()) {
-                      final success = await ref.read(authControllerProvider.notifier).signUp(
-                        name: nameController.text.trim(),
-                        email: emailController.text.trim(),
-                        phone: phnController.text.trim(),
-                        password: passwordController.text.trim(),
-                      );
+                      final success = await ref
+                          .read(authControllerProvider.notifier)
+                          .signUp(
+                            name: nameController.text.trim(),
+                            email: emailController.text.trim(),
+                            phone: phnController.text.trim(),
+                            password: passwordController.text.trim(),
+                          );
 
                       if (success) {
                         Navigator.pushAndRemoveUntil(
                           context,
-                          MaterialPageRoute(builder: (context) => AddExpensePageHomePage()),
+                          MaterialPageRoute(
+                            builder: (context) => AddExpensePageHomePage(),
+                          ),
                           (Route<dynamic> route) => route.isFirst,
                         );
                       } else {
@@ -181,16 +197,23 @@ class SignUpPage extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.start,
                 children: [
-                  commonTextCenterAlign(title: doYouHaveAccount, style: textStyle_14_400_55555A),
+                  commonTextCenterAlign(
+                    title: doYouHaveAccount,
+                    style: textStyle_14_400_55555A,
+                  ),
                   ws(4),
                   GestureDetector(
-                      onTap: () {
-                        CustomNavigation.to(context,SignInPage());
-                      },
-                      child: commonTextCenterAlign(title: signIn, style: textStyle_14_400_0461E5))
+                    onTap: () {
+                      CustomNavigation.to(context, SignInPage());
+                    },
+                    child: commonTextCenterAlign(
+                      title: signIn,
+                      style: textStyle_14_400_0461E5,
+                    ),
+                  ),
                 ],
               ),
-            )
+            ),
           ],
         ),
       ),

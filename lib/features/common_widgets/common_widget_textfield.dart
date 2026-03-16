@@ -5,26 +5,27 @@ import 'package:know_your_expenses/features/common_widgets/common_widgets.dart';
 import 'common_colors.dart';
 
 class CustomTextFormField extends StatefulWidget {
-  const CustomTextFormField(
-      {super.key,
-        this.heading,
-        required this.hint,
-        required this.controller,
-        this.validator,
-        this.constraints,
-        this.maxLength,
-        this.maxLines,
-        this.errorMessage,
-        this.keyboardType,
-        this.enable = true,
-        this.readOnly,
-        this.suffixWidget,
-        this.inputFormatters,
-        this.allowSpecialChar = false,
-        this.textCapitalization,
-        this.contentPadding,
-        this.focusNode,
-        this.containerPadding});
+  const CustomTextFormField({
+    super.key,
+    this.heading,
+    required this.hint,
+    required this.controller,
+    this.validator,
+    this.constraints,
+    this.maxLength,
+    this.maxLines,
+    this.errorMessage,
+    this.keyboardType,
+    this.enable = true,
+    this.readOnly,
+    this.suffixWidget,
+    this.inputFormatters,
+    this.allowSpecialChar = false,
+    this.textCapitalization,
+    this.contentPadding,
+    this.focusNode,
+    this.containerPadding,
+  });
 
   final String? heading;
   final String hint;
@@ -79,17 +80,24 @@ class _CustomTextFormFieldState extends State<CustomTextFormField> {
         _focusNode.unfocus();
       },
       child: Container(
-        padding: widget.containerPadding ??
-            EdgeInsets.only(left: 20, right: 20, top: 16, bottom: _hasError ? 18 : 14),
+        padding:
+            widget.containerPadding ??
+            EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 16,
+              bottom: _hasError ? 18 : 14,
+            ),
         decoration: BoxDecoration(
           color: textColor_F5F9FF,
           border: Border.all(
-              color: _hasError
-                  ? containerErrorBorderColor
-                  : _isFocused
-                  ? textFormFieldContainerFocusedBorderColor
-                  : textFormFieldContainerBorderColor,
-              width: _hasError || _isFocused ? 2 : 1),
+            color: _hasError
+                ? containerErrorBorderColor
+                : _isFocused
+                ? textFormFieldContainerFocusedBorderColor
+                : textFormFieldContainerBorderColor,
+            width: _hasError || _isFocused ? 2 : 1,
+          ),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
@@ -100,7 +108,8 @@ class _CustomTextFormFieldState extends State<CustomTextFormField> {
               children: [
                 Expanded(
                   child: TextFormField(
-                    textCapitalization: widget.textCapitalization ?? TextCapitalization.none,
+                    textCapitalization:
+                        widget.textCapitalization ?? TextCapitalization.none,
                     focusNode: _focusNode,
                     readOnly: widget.readOnly ?? false,
                     style: textFieldEnteredTextStyle,
@@ -116,19 +125,21 @@ class _CustomTextFormFieldState extends State<CustomTextFormField> {
                     inputFormatters: [
                       FilteringTextInputFormatter.deny(
                         RegExp(
-                          r'[\u{1F600}-\u{1F64F}]|'  // Emoticons
-                          r'[\u{1F300}-\u{1F5FF}]|'  // Symbols & pictographs
-                          r'[\u{1F680}-\u{1F6FF}]|'  // Transport & map symbols
-                          r'[\u{2600}-\u{26FF}]|'    // Misc symbols
-                          r'[\u{2700}-\u{27BF}]|'    // Dingbats
-                          r'[\u{1F900}-\u{1F9FF}]|'  // Supplemental pictographs
-                          r'[\u{1FA70}-\u{1FAFF}]',  // Extended pictographs
+                          r'[\u{1F600}-\u{1F64F}]|' // Emoticons
+                          r'[\u{1F300}-\u{1F5FF}]|' // Symbols & pictographs
+                          r'[\u{1F680}-\u{1F6FF}]|' // Transport & map symbols
+                          r'[\u{2600}-\u{26FF}]|' // Misc symbols
+                          r'[\u{2700}-\u{27BF}]|' // Dingbats
+                          r'[\u{1F900}-\u{1F9FF}]|' // Supplemental pictographs
+                          r'[\u{1FA70}-\u{1FAFF}]', // Extended pictographs
                           unicode: true,
                         ),
                         replacementString: '',
                       ),
                       if (!widget.allowSpecialChar!)
-                        FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\s@._-]')),
+                        FilteringTextInputFormatter.allow(
+                          RegExp(r'[a-zA-Z0-9\s@._-]'),
+                        ),
                       ...?widget.inputFormatters,
                     ],
                     controller: widget.controller,
@@ -177,16 +188,13 @@ class _CustomTextFormFieldState extends State<CustomTextFormField> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8.0),
                   child: widget.suffixWidget ?? SizedBox(),
-                )
+                ),
               ],
             ),
             if (_hasError && _errorText != null)
               Padding(
                 padding: const EdgeInsets.only(top: 4.0),
-                child: Text(
-                  _errorText!,
-                  style: textFieldErrorTextStyle,
-                ),
+                child: Text(_errorText!, style: textFieldErrorTextStyle),
               ),
           ],
         ),

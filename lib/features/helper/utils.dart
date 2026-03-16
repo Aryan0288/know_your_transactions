@@ -3,7 +3,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:toastification/toastification.dart';
 
 class Utils {
-  static void showSuccessToast(BuildContext context, {String? title, String? description}) {
+  static void showSuccessToast(
+    BuildContext context, {
+    String? title,
+    String? description,
+  }) {
     toastification.show(
       context: context,
       type: ToastificationType.success,
@@ -41,13 +45,18 @@ class Utils {
           color: Colors.green.withOpacity(0.3),
           blurRadius: 20,
           offset: const Offset(0, 10),
-        )
+        ),
       ],
       closeButtonShowType: CloseButtonShowType.onHover,
     );
   }
 
-  static void showErrorToast(BuildContext context, {String? title, String? description, Alignment? alignment}) {
+  static void showErrorToast(
+    BuildContext context, {
+    String? title,
+    String? description,
+    Alignment? alignment,
+  }) {
     toastification.show(
       context: context,
       type: ToastificationType.error,
@@ -85,7 +94,7 @@ class Utils {
           color: Colors.red.withOpacity(0.3),
           blurRadius: 20,
           offset: const Offset(0, 10),
-        )
+        ),
       ],
       closeButtonShowType: CloseButtonShowType.onHover,
     );

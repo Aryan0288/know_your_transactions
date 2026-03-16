@@ -16,7 +16,6 @@ class ResetPasswordPage extends StatelessWidget {
     _focusNode.unfocus();
   }
 
-
   @override
   Widget build(BuildContext context) {
     return CommonScaffold(
@@ -31,27 +30,37 @@ class ResetPasswordPage extends StatelessWidget {
               padding: EdgeInsetsGeometry.all(24),
               child: Column(
                 children: [
-                  commonTextCenterAlign(title: resetPassword, style: headingTextStyle),
+                  commonTextCenterAlign(
+                    title: resetPassword,
+                    style: headingTextStyle,
+                  ),
                   hs(8),
-                  commonTextCenterAlign(title: forgetPassDesc, style: textStyle_14_400_55555A),
+                  commonTextCenterAlign(
+                    title: forgetPassDesc,
+                    style: textStyle_14_400_55555A,
+                  ),
                   hs(32),
                   Form(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         hs(12),
-                        CustomTextFormField(hint: password, controller: passwordController,suffixWidget: Icon(Icons.visibility_off)),
+                        CustomTextFormField(
+                          hint: password,
+                          controller: passwordController,
+                          suffixWidget: Icon(Icons.visibility_off),
+                        ),
                         hs(12),
-                        CustomTextFormField(hint: confirmPassword, controller: passwordController,suffixWidget: Icon(Icons.visibility_off)),
+                        CustomTextFormField(
+                          hint: confirmPassword,
+                          controller: passwordController,
+                          suffixWidget: Icon(Icons.visibility_off),
+                        ),
                       ],
                     ),
                   ),
                   hs(32),
-                  elevatedButton(
-                    onPressed: () {
-                    },
-                    title: submit,
-                  ),
+                  elevatedButton(onPressed: () {}, title: submit),
                 ],
               ),
             ),
@@ -61,4 +70,3 @@ class ResetPasswordPage extends StatelessWidget {
     );
   }
 }
-

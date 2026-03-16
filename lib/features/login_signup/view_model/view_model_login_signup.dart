@@ -1,4 +1,3 @@
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,26 +10,27 @@ import 'package:know_your_expenses/features/transaction/view_model/view_model_tr
 //   return null;
 // });
 
-final authControllerProvider = StateNotifierProvider<AuthController,AuthState>((ref)=> AuthController(ref));
+final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
+  (ref) => AuthController(ref),
+);
 
-class AuthController extends StateNotifier<AuthState>{
-
+class AuthController extends StateNotifier<AuthState> {
   AuthController(this.ref) : super(const AuthState());
 
   final Ref ref;
 
   FirebaseAuth get _auth => ref.read(firebaseAuthProvider);
 
-  Future<bool> signIn(String email, String password)async{
-    try{
-      state = state.copyWith(isLoading: true,error: null);
+  Future<bool> signIn(String email, String password) async {
+    try {
+      state = state.copyWith(isLoading: true, error: null);
 
       final cred = await _auth.signInWithEmailAndPassword(
-          email: email,
-          password: password);
+        email: email,
+        password: password,
+      );
 
-
-      final user = cred.user;/**/
+      final user = cred.user; /**/
 
       if (user != null && !user.emailVerified) {
         // 🔹 Resend verification email/**/
@@ -38,40 +38,35 @@ class AuthController extends StateNotifier<AuthState>{
 
         state = state.copyWith(
           isLoading: false,
-          error: "Email not verified. Verification link sent again to your email.",
+          error:
+              "Email not verified. Verification link sent again to your email.",
         );
 
         return false; // ❌ Don't allow login into app
       }
 
-
-      state = state.copyWith(isLoading: false,error: null);
+      state = state.copyWith(isLoading: false, error: null);
       return true;
-
-    } on FirebaseAuthException catch(e){
+    } on FirebaseAuthException catch (e) {
       String message = "Something went wrong";
 
       if (e.code == 'invalid-credential') {
         message = "Account not found or wrong password. Please sign up.";
-      }
-      else if (e.code == 'user-not-found') {
+      } else if (e.code == 'user-not-found') {
         message = "No account found. Please sign up first.";
-      }
-      else if (e.code == 'wrong-password') {
+      } else if (e.code == 'wrong-password') {
         message = "Wrong password. Try again.";
-      }
-      else if (e.code == 'invalid-email') {
+      } else if (e.code == 'invalid-email') {
         message = "Invalid email format.";
       }
 
       state = state.copyWith(isLoading: false, error: message);
       return false;
-    } catch(e){
+    } catch (e) {
       state = state.copyWith(isLoading: false, error: "Something went wrong");
       return false;
     }
   }
-
 
   Future<bool> signUp({
     required String name,
@@ -82,8 +77,7 @@ class AuthController extends StateNotifier<AuthState>{
     try {
       state = state.copyWith(isLoading: true, error: null);
 
-      final cred = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
+      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -96,15 +90,14 @@ class AuthController extends StateNotifier<AuthState>{
           .collection('users')
           .doc(cred.user!.uid)
           .set({
-        'name': name,
-        'email': email,
-        'phone': phone,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+            'name': name,
+            'email': email,
+            'phone': phone,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
 
       state = state.copyWith(isLoading: false);
       return true;
-
     } on FirebaseAuthException catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -114,12 +107,36 @@ class AuthController extends StateNotifier<AuthState>{
     }
   }
 
-
-  void setError(String error){
-    state = state.copyWith(error: error,isLoading: false);
+  Future<bool> resetPassword(String email) async {
+    try {
+      state = state.copyWith(isLoading: true, error: null);
+      
+      await _auth.sendPasswordResetEmail(email: email);
+      
+      state = state.copyWith(isLoading: false);
+      return true;
+    } on FirebaseAuthException catch (e) {
+      String message = "Failed to send reset email";
+      
+      if (e.code == 'user-not-found') {
+        message = "No account found for this email.";
+      } else if (e.code == 'invalid-email') {
+        message = "Invalid email format.";
+      }
+      
+      state = state.copyWith(isLoading: false, error: message);
+      return false;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: "Something went wrong");
+      return false;
+    }
   }
 
-  void clearError(){
+  void setError(String error) {
+    state = state.copyWith(error: error, isLoading: false);
+  }
+
+  void clearError() {
     state = state.copyWith(error: null);
   }
 

@@ -8,12 +8,16 @@ import 'package:intl/intl.dart';
 import 'dart:math' as math;
 import 'package:know_your_expenses/features/transaction/model/model_transaction.dart';
 
+import 'package:google_fonts/google_fonts.dart';
+import 'package:know_your_expenses/features/home/view_model/view_model_home.dart';
+
 class FinancialInsightsPage extends ConsumerWidget {
   const FinancialInsightsPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final insights = ref.watch(financialInsightsProvider);
+    final user = ref.watch(firebaseAuthProvider).currentUser;
 
     return CommonScaffold(
       backgroundColor: Colors.white,
@@ -22,30 +26,54 @@ class FinancialInsightsPage extends ConsumerWidget {
         appBarTitle: "Smart Insights",
         appBarColor: Colors.white,
         icon: Icon(Icons.auto_awesome, size: 20, color: textColor_3E7C78),
-        appBarTitleStyle: appBarTitleTextStyle.copyWith(fontSize: 18, color: textColor_181636),
+        appBarTitleStyle: appBarTitleTextStyle.copyWith(
+          fontSize: 18,
+          color: textColor_181636,
+        ),
         onPressed: () => ref.read(bottomNavIndexProvider.notifier).state = 0,
       ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              hs(20),
-              _buildHealthScoreCard(insights),
-              hs(30),
-              _buildHistorySection(context, ref),
-              hs(30),
-              _buildForecastSection(insights.forecastAmount),
-              hs(30),
-              _buildWisdomSection(insights.wisdoms),
-
-              hs(40),
-            ],
-          ),
-        ),
-      ),
+      body: user == null
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.lock_outline,
+                    size: 64,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Sign in to see your insights',
+                    style: GoogleFonts.manrope(
+                      fontSize: 16,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    hs(20),
+                    _buildHealthScoreCard(insights),
+                    hs(30),
+                    _buildHistorySection(context, ref),
+                    hs(30),
+                    _buildForecastSection(insights.forecastAmount),
+                    hs(30),
+                    _buildWisdomSection(insights.wisdoms),
+                    hs(40),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 
@@ -78,12 +106,18 @@ class FinancialInsightsPage extends ConsumerWidget {
                 width: 160,
                 height: 160,
                 child: TweenAnimationBuilder<double>(
-                  tween: Tween<double>(begin: 0, end: insights.healthScore / 100),
+                  tween: Tween<double>(
+                    begin: 0,
+                    end: insights.healthScore / 100,
+                  ),
                   duration: const Duration(milliseconds: 1500),
                   curve: Curves.easeOutQuart,
                   builder: (context, value, child) {
                     return CustomPaint(
-                      painter: HealthGaugePainter(value: value, color: Colors.white),
+                      painter: HealthGaugePainter(
+                        value: value,
+                        color: Colors.white,
+                      ),
                     );
                   },
                 ),
@@ -91,19 +125,24 @@ class FinancialInsightsPage extends ConsumerWidget {
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                   TweenAnimationBuilder<int>(
+                  TweenAnimationBuilder<int>(
                     tween: IntTween(begin: 0, end: insights.healthScore),
                     duration: const Duration(milliseconds: 1500),
                     builder: (context, value, child) {
                       return Text(
                         "$value",
-                        style: textStyle_14_700_72788C.copyWith(color: Colors.white,fontSize: 48),
+                        style: textStyle_14_700_72788C.copyWith(
+                          color: Colors.white,
+                          fontSize: 48,
+                        ),
                       );
                     },
                   ),
                   Text(
                     insights.healthLabel,
-                    style: textStyle_14_400_55555A.copyWith(color: Colors.white),
+                    style: textStyle_14_400_55555A.copyWith(
+                      color: Colors.white,
+                    ),
                   ),
                 ],
               ),
@@ -113,7 +152,11 @@ class FinancialInsightsPage extends ConsumerWidget {
           Text(
             insights.healthMessage,
             textAlign: TextAlign.center,
-            style: textStyle_14_400_55555A.copyWith(color: Colors.white,height: 1.5,fontSize: 13),
+            style: textStyle_14_400_55555A.copyWith(
+              color: Colors.white,
+              height: 1.5,
+              fontSize: 13,
+            ),
           ),
         ],
       ),
@@ -126,7 +169,10 @@ class FinancialInsightsPage extends ConsumerWidget {
       children: [
         Text(
           "A.I. Predictive Forecast",
-          style: textStyle_14_600_181636.copyWith(fontSize: 18,fontWeight: FontWeight.bold),
+          style: textStyle_14_600_181636.copyWith(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         hs(16),
         Container(
@@ -151,7 +197,10 @@ class FinancialInsightsPage extends ConsumerWidget {
                   color: const Color(0xFFF0FDF4),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.trending_down, color: Color(0xFF22C55E)),
+                child: const Icon(
+                  Icons.trending_down,
+                  color: Color(0xFF22C55E),
+                ),
               ),
               ws(16),
               Expanded(
@@ -179,24 +228,34 @@ class FinancialInsightsPage extends ConsumerWidget {
 
   Widget _buildWisdomSection(List<InsightWisdom> wisdoms) {
     if (wisdoms.isEmpty) return const SizedBox();
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           "Spending Wisdom",
-          style: textStyle_14_600_181636.copyWith(fontSize: 18,fontWeight: FontWeight.bold),
+          style: textStyle_14_600_181636.copyWith(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         hs(16),
-        ...wisdoms.map((w) => Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: _buildWisdomCard(w.title, w.description, w.icon, w.color),
-        )),
+        ...wisdoms.map(
+          (w) => Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: _buildWisdomCard(w.title, w.description, w.icon, w.color),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildWisdomCard(String title, String desc, IconData icon, Color color) {
+  Widget _buildWisdomCard(
+    String title,
+    String desc,
+    IconData icon,
+    Color color,
+  ) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -215,12 +274,20 @@ class FinancialInsightsPage extends ConsumerWidget {
               children: [
                 Text(
                   title,
-                  style: textStyle_14_600_181636.copyWith(fontSize: 16,fontWeight: FontWeight.bold,color: color),
+                  style: textStyle_14_600_181636.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
                 ),
                 hs(4),
                 Text(
                   desc,
-                  style: textStyle_14_600_181636.copyWith(fontSize: 13,color: color.withOpacity(0.8),height: 1.3),
+                  style: textStyle_14_600_181636.copyWith(
+                    fontSize: 13,
+                    color: color.withOpacity(0.8),
+                    height: 1.3,
+                  ),
                 ),
               ],
             ),
@@ -234,15 +301,20 @@ class FinancialInsightsPage extends ConsumerWidget {
     final selectedMonth = ref.watch(historySelectedMonthProvider);
     final selectedYear = ref.watch(historySelectedYearProvider);
     final transactions = ref.watch(monthlyHistoryTransactionsProvider);
-    
-    final totalMonthlyExpense = transactions.where((t) => t.isExpense).fold(0.0, (sum, t) => sum + t.amount);
+
+    final totalMonthlyExpense = transactions
+        .where((t) => t.isExpense)
+        .fold(0.0, (sum, t) => sum + t.amount);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           "Monthly History",
-          style: textStyle_14_600_181636.copyWith(fontSize: 18,fontWeight: FontWeight.bold),
+          style: textStyle_14_600_181636.copyWith(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         hs(16),
         _buildMonthYearSelectors(ref, selectedMonth, selectedYear),
@@ -264,7 +336,10 @@ class FinancialInsightsPage extends ConsumerWidget {
               hs(8),
               Text(
                 "\₹${totalMonthlyExpense.toStringAsFixed(2)}",
-                style: textStyle_14_600_181636.copyWith(fontSize: 28,fontWeight: FontWeight.bold),
+                style: textStyle_14_600_181636.copyWith(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               hs(24),
               const Divider(height: 1),
@@ -292,7 +367,11 @@ class FinancialInsightsPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildMonthYearSelectors(WidgetRef ref, int selectedMonth, int selectedYear) {
+  Widget _buildMonthYearSelectors(
+    WidgetRef ref,
+    int selectedMonth,
+    int selectedYear,
+  ) {
     final months = List.generate(12, (i) => i + 1);
     final years = List.generate(5, (i) => DateTime.now().year - i);
 
@@ -309,18 +388,30 @@ class FinancialInsightsPage extends ConsumerWidget {
               final month = months[index];
               final isSelected = month == selectedMonth;
               return GestureDetector(
-                onTap: () => ref.read(historySelectedMonthProvider.notifier).state = month,
+                onTap: () =>
+                    ref.read(historySelectedMonthProvider.notifier).state =
+                        month,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(
                     color: isSelected ? textColor_3E7C78 : Colors.grey.shade50,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: isSelected ? textColor_3E7C78 : Colors.grey.shade200),
+                    border: Border.all(
+                      color: isSelected
+                          ? textColor_3E7C78
+                          : Colors.grey.shade200,
+                    ),
                   ),
                   alignment: Alignment.center,
                   child: Text(
                     DateFormat('MMM').format(DateTime(2022, month)),
-                    style: textStyle_14_600_181636.copyWith(fontSize: 14,fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,color: isSelected ? Colors.white : textColor_55555A),
+                    style: textStyle_14_600_181636.copyWith(
+                      fontSize: 14,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.w500,
+                      color: isSelected ? Colors.white : textColor_55555A,
+                    ),
                   ),
                 ),
               );
@@ -339,18 +430,29 @@ class FinancialInsightsPage extends ConsumerWidget {
               final year = years[index];
               final isSelected = year == selectedYear;
               return GestureDetector(
-                onTap: () => ref.read(historySelectedYearProvider.notifier).state = year,
+                onTap: () =>
+                    ref.read(historySelectedYearProvider.notifier).state = year,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(
                     color: isSelected ? textColor_3E7C78 : Colors.grey.shade50,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: isSelected ? textColor_3E7C78 : Colors.grey.shade200),
+                    border: Border.all(
+                      color: isSelected
+                          ? textColor_3E7C78
+                          : Colors.grey.shade200,
+                    ),
                   ),
                   alignment: Alignment.center,
                   child: Text(
                     "$year",
-                    style: textStyle_14_600_181636.copyWith(fontSize: 14,fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,color: isSelected ? Colors.white : textColor_55555A,),
+                    style: textStyle_14_600_181636.copyWith(
+                      fontSize: 14,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.w500,
+                      color: isSelected ? Colors.white : textColor_55555A,
+                    ),
                   ),
                 ),
               );
@@ -397,7 +499,11 @@ class FinancialInsightsPage extends ConsumerWidget {
         ),
         Text(
           "${t.isExpense ? '-' : '+'}\₹${t.amount.toStringAsFixed(0)}",
-          style: textStyle_12_400_55555A.copyWith(color: t.isExpense ? Colors.redAccent : Colors.green,fontSize: 14,fontWeight: FontWeight.bold),
+          style: textStyle_12_400_55555A.copyWith(
+            color: t.isExpense ? Colors.redAccent : Colors.green,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ],
     );
@@ -448,5 +554,6 @@ class HealthGaugePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant HealthGaugePainter oldDelegate) => oldDelegate.value != value;
+  bool shouldRepaint(covariant HealthGaugePainter oldDelegate) =>
+      oldDelegate.value != value;
 }

@@ -13,7 +13,6 @@ class StatisticsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-
     return CommonScaffold(
       backgroundColor: Colors.white,
       appBar: appBarWithoutProgress(
@@ -21,8 +20,11 @@ class StatisticsPage extends ConsumerWidget {
         appBarTitle: "Statistics",
         appBarColor: Colors.white,
         icon: Icon(Icons.arrow_back_ios_new, size: 20, color: textColor_181636),
-        appBarTitleStyle: appBarTitleTextStyle.copyWith(fontSize: 18, color: textColor_181636),
-        onPressed: () => ref.read(bottomNavIndexProvider.notifier).state=0,
+        appBarTitleStyle: appBarTitleTextStyle.copyWith(
+          fontSize: 18,
+          color: textColor_181636,
+        ),
+        onPressed: () => ref.read(bottomNavIndexProvider.notifier).state = 0,
         actions: [
           IconButton(
             onPressed: () {
@@ -40,7 +42,7 @@ class StatisticsPage extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
               child: Consumer(
-                builder: (context,ref,child) {
+                builder: (context, ref, child) {
                   final selectedPeriod = ref.watch(selectedPeriodProvider);
                   final topSpending = ref.watch(topSpendingProvider);
                   return Column(
@@ -50,21 +52,26 @@ class StatisticsPage extends ConsumerWidget {
                       hs(24),
                       _buildExpenseDropdown(),
                       hs(20),
-                      _buildChartSection(context, ref, selectedPeriod, topSpending),
+                      _buildChartSection(
+                        context,
+                        ref,
+                        selectedPeriod,
+                        topSpending,
+                      ),
                       hs(52),
                       _buildTopSpendingHeader(),
                       hs(20),
                     ],
                   );
-                }
+                },
               ),
             ),
             Expanded(
               child: Consumer(
-                builder: (context,ref,child) {
+                builder: (context, ref, child) {
                   final topSpending = ref.watch(topSpendingProvider);
                   return _buildTopSpendingList(topSpending);
-                }
+                },
               ),
             ),
           ],
@@ -80,52 +87,57 @@ class StatisticsPage extends ConsumerWidget {
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: LayoutBuilder(builder: (context, constraints) {
-        final itemWidth = constraints.maxWidth / 4;
-        return Stack(
-          children: [
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
-              left: _getLeftOffset(selectedPeriod, itemWidth),
-              child: Container(
-                width: itemWidth,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: textColor_3E7C78.withOpacity(0.8),
-                  borderRadius: BorderRadius.circular(10),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final itemWidth = constraints.maxWidth / 4;
+          return Stack(
+            children: [
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                left: _getLeftOffset(selectedPeriod, itemWidth),
+                child: Container(
+                  width: itemWidth,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: textColor_3E7C78.withOpacity(0.8),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
               ),
-            ),
-            Row(
-              children: StatisticsPeriod.values.map((period) {
-                final isSelected = selectedPeriod == period;
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      ref.read(selectedPeriodProvider.notifier).state = period;
-                      ref.read(touchedIndexProvider.notifier).state = -1;
-                    },
+              Row(
+                children: StatisticsPeriod.values.map((period) {
+                  final isSelected = selectedPeriod == period;
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        ref.read(selectedPeriodProvider.notifier).state =
+                            period;
+                        ref.read(touchedIndexProvider.notifier).state = -1;
+                      },
 
-                    behavior: HitTestBehavior.opaque,
-                    child: Center(
-                      child: Text(
-                        _getPeriodTitle(period),
-                        style: TextStyle(
-                          fontFamily: manRopeBold,
-                          color: isSelected ? Colors.white : textColor_55555A,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                          fontSize: 14,
+                      behavior: HitTestBehavior.opaque,
+                      child: Center(
+                        child: Text(
+                          _getPeriodTitle(period),
+                          style: TextStyle(
+                            fontFamily: manRopeBold,
+                            color: isSelected ? Colors.white : textColor_55555A,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.w500,
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ],
-        );
-      }),
+                  );
+                }).toList(),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -176,16 +188,25 @@ class StatisticsPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildChartSection(BuildContext context, WidgetRef ref, StatisticsPeriod period, List<TransactionModel> transactions) {
+  Widget _buildChartSection(
+    BuildContext context,
+    WidgetRef ref,
+    StatisticsPeriod period,
+    List<TransactionModel> transactions,
+  ) {
     final touchedIndex = ref.watch(touchedIndexProvider);
 
     final Map<String, double> categoryTotals = {};
     for (var t in transactions) {
       if (!t.isExpense) continue;
-      categoryTotals[t.categoryName] = (categoryTotals[t.categoryName] ?? 0) + t.amount;
+      categoryTotals[t.categoryName] =
+          (categoryTotals[t.categoryName] ?? 0) + t.amount;
     }
     final categories = categoryTotals.keys.toList();
-    final totalValue = categoryTotals.values.fold(0.0, (sum, item) => sum + item);
+    final totalValue = categoryTotals.values.fold(
+      0.0,
+      (sum, item) => sum + item,
+    );
 
     String centerTitle = "Total";
     String centerAmount = "\₹${totalValue.toStringAsFixed(0)}";
@@ -200,7 +221,8 @@ class StatisticsPage extends ConsumerWidget {
       for (int i = 0; i < touchedIndex; i++) {
         currentAngle += (categoryTotals[categories[i]]! / totalValue) * 360;
       }
-      double sweepAngle = (categoryTotals[categories[touchedIndex]]! / totalValue) * 360;
+      double sweepAngle =
+          (categoryTotals[categories[touchedIndex]]! / totalValue) * 360;
       rotationOffset = 270 - (currentAngle + sweepAngle / 2);
     }
 
@@ -219,8 +241,9 @@ class StatisticsPage extends ConsumerWidget {
               pieTouchData: PieTouchData(
                 enabled: true,
                 touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                  final rotationNotifier =
-                  ref.read(rotationOffsetProvider.notifier);
+                  final rotationNotifier = ref.read(
+                    rotationOffsetProvider.notifier,
+                  );
 
                   // 🔄 Rotate chart while dragging
                   if (event is FlPanUpdateEvent) {
@@ -245,7 +268,6 @@ class StatisticsPage extends ConsumerWidget {
             curve: Curves.decelerate,
           ),
 
-
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
             child: GestureDetector(
@@ -259,8 +281,12 @@ class StatisticsPage extends ConsumerWidget {
                   Text(
                     centerTitle,
                     style: textStyle_14_600_181636.copyWith(
-                      color: touchedIndex != -1 ? textColor_3E7C78 : textColor_181636.withOpacity(0.6),
-                      fontWeight: touchedIndex != -1 ? FontWeight.bold : FontWeight.w400,
+                      color: touchedIndex != -1
+                          ? textColor_3E7C78
+                          : textColor_181636.withOpacity(0.6),
+                      fontWeight: touchedIndex != -1
+                          ? FontWeight.bold
+                          : FontWeight.w400,
                     ),
                   ),
                   Text(
@@ -280,7 +306,10 @@ class StatisticsPage extends ConsumerWidget {
     );
   }
 
-  List<PieChartSectionData> _generatePieSections(List<TransactionModel> transactions, WidgetRef ref) {
+  List<PieChartSectionData> _generatePieSections(
+    List<TransactionModel> transactions,
+    WidgetRef ref,
+  ) {
     final touchedIndex = ref.watch(touchedIndexProvider);
     final Map<String, double> categoryTotals = {};
     final Map<String, Color> categoryColors = {};
@@ -289,11 +318,15 @@ class StatisticsPage extends ConsumerWidget {
 
     for (var t in transactions) {
       if (!t.isExpense) continue;
-      categoryTotals[t.categoryName] = (categoryTotals[t.categoryName] ?? 0) + t.amount;
+      categoryTotals[t.categoryName] =
+          (categoryTotals[t.categoryName] ?? 0) + t.amount;
       categoryColors[t.categoryName] = t.color;
     }
 
-    final totalValue = categoryTotals.values.fold(0.0, (sum, item) => sum + item);
+    final totalValue = categoryTotals.values.fold(
+      0.0,
+      (sum, item) => sum + item,
+    );
     final categories = categoryTotals.keys.toList();
 
     // Premium Color Palette
@@ -351,10 +384,7 @@ class StatisticsPage extends ConsumerWidget {
           builder: (context, animValue, child) {
             return Transform.scale(
               scale: animValue,
-              child: Opacity(
-                opacity: animValue.clamp(0.0, 1.0),
-                child: child,
-              ),
+              child: Opacity(opacity: animValue.clamp(0.0, 1.0), child: child),
             );
           },
           child: Container(
@@ -367,7 +397,7 @@ class StatisticsPage extends ConsumerWidget {
                   color: Colors.black.withOpacity(0.15),
                   blurRadius: 8,
                   spreadRadius: 1,
-                )
+                ),
               ],
             ),
             child: Text(
@@ -386,12 +416,17 @@ class StatisticsPage extends ConsumerWidget {
     });
   }
 
-
   Widget _buildTopSpendingHeader() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text("Top Spending", style: appBarTitleTextStyle.copyWith(fontSize: 18, color: Colors.black)),
+        Text(
+          "Top Spending",
+          style: appBarTitleTextStyle.copyWith(
+            fontSize: 18,
+            color: Colors.black,
+          ),
+        ),
         Icon(Icons.swap_vert, color: Colors.grey.shade600),
       ],
     );
@@ -399,7 +434,9 @@ class StatisticsPage extends ConsumerWidget {
 
   Widget _buildTopSpendingList(List<TransactionModel> transactions) {
     if (transactions.isEmpty) {
-      return Center(child: Text("No data found", style: textStyle_14_400_55555A));
+      return Center(
+        child: Text("No data found", style: textStyle_14_400_55555A),
+      );
     }
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -407,19 +444,22 @@ class StatisticsPage extends ConsumerWidget {
       separatorBuilder: (context, index) => hs(16),
       itemBuilder: (context, index) {
         final t = transactions[index];
-        bool isSelected = index == 1; // Just for "wow" matching the image teal highlight
+        bool isSelected =
+            index == 1; // Just for "wow" matching the image teal highlight
         return Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: isSelected ? textColor_3E7C78 : Colors.white,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: isSelected ? [] : [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
+            boxShadow: isSelected
+                ? []
+                : [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
           ),
           child: Row(
             children: [
@@ -427,7 +467,9 @@ class StatisticsPage extends ConsumerWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: isSelected ? Colors.white.withOpacity(0.2) : Colors.grey.shade100,
+                  color: isSelected
+                      ? Colors.white.withOpacity(0.2)
+                      : Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(t.icon, color: isSelected ? Colors.white : t.color),
@@ -469,14 +511,14 @@ class StatisticsPage extends ConsumerWidget {
 }
 
 AppBar appBarWithoutProgress(
-    BuildContext context, {
-      required String appBarTitle,
-      required Color appBarColor,
-      required Widget icon,
-      required TextStyle appBarTitleStyle,
-      required VoidCallback onPressed,
-      List<Widget>? actions,
-    }) {
+  BuildContext context, {
+  required String appBarTitle,
+  required Color appBarColor,
+  required Widget icon,
+  required TextStyle appBarTitleStyle,
+  required VoidCallback onPressed,
+  List<Widget>? actions,
+}) {
   return AppBar(
     backgroundColor: appBarColor,
     elevation: 0,

@@ -14,7 +14,7 @@ class EnterOtpPage extends ConsumerWidget {
   EnterOtpPage({super.key});
 
   final StreamController<ErrorAnimationType> errorController =
-  StreamController<ErrorAnimationType>();
+      StreamController<ErrorAnimationType>();
   final TextEditingController otpController = TextEditingController();
 
   final FocusNode _focusNode = FocusNode();
@@ -23,18 +23,18 @@ class EnterOtpPage extends ConsumerWidget {
     _focusNode.unfocus();
   }
 
-  Future<bool> verifyOtp(String otp)async{
+  Future<bool> verifyOtp(String otp) async {
     print("verify otp called");
-    if(otp == "123456") return true;
+    if (otp == "123456") return true;
     return false;
   }
-  Future<void> resendOtp()async{
+
+  Future<void> resendOtp() async {
     print("resend otp");
   }
 
-
   @override
-  Widget build(BuildContext context,WidgetRef ref) {
+  Widget build(BuildContext context, WidgetRef ref) {
     // final errorText = ref.watch(errorTextProvider);
     final authState = ref.watch(authControllerProvider);
     print("rebuild errorText --- ${authState.error}");
@@ -51,12 +51,17 @@ class EnterOtpPage extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  commonTextCenterAlign(title: enterOtp, style: headingTextStyle),
+                  commonTextCenterAlign(
+                    title: enterOtp,
+                    style: headingTextStyle,
+                  ),
                   hs(8),
-                  commonTextCenterAlign(title: enterOtpDesc, style: textStyle_14_400_55555A),
+                  commonTextCenterAlign(
+                    title: enterOtpDesc,
+                    style: textStyle_14_400_55555A,
+                  ),
                   hs(32),
                   PinCodeTextField(
-
                     textStyle: textStyle_14_400_55555A,
                     appContext: context,
                     length: 5,
@@ -96,7 +101,7 @@ class EnterOtpPage extends ConsumerWidget {
                         offset: Offset(0, 1),
                         color: Colors.black12,
                         blurRadius: 10,
-                      )
+                      ),
                     ],
                     onCompleted: (v) {
                       _focusNode.unfocus();
@@ -107,20 +112,22 @@ class EnterOtpPage extends ConsumerWidget {
                       ref.read(authControllerProvider.notifier).clearError();
                     },
                   ),
-                  
-                  if(authState.error!=null)
-                    commonTextStartAlign(title: authState.error ?? '',style: errorTextStyle_w500),
 
-
+                  if (authState.error != null)
+                    commonTextStartAlign(
+                      title: authState.error ?? '',
+                      style: errorTextStyle_w500,
+                    ),
 
                   hs(32),
                   elevatedButton(
                     onPressed: () {
-                      if(otpController.text.length==6){
-
-                      }else{
+                      if (otpController.text.length == 6) {
+                      } else {
                         errorController.add(ErrorAnimationType.shake);
-                        ref.read(authControllerProvider.notifier).setError("Please enter OTP to proceed");
+                        ref
+                            .read(authControllerProvider.notifier)
+                            .setError("Please enter OTP to proceed");
                       }
                     },
                     title: resetPassword,
@@ -129,16 +136,23 @@ class EnterOtpPage extends ConsumerWidget {
                     padding: const EdgeInsets.only(left: 8.0),
                     child: Row(
                       children: [
-                        commonTextStartAlign(title: didNotGetOTP, style: textStyle_14_400_55555A),
+                        commonTextStartAlign(
+                          title: didNotGetOTP,
+                          style: textStyle_14_400_55555A,
+                        ),
                         TextButton(
                           style: ButtonStyle(
                             padding: WidgetStatePropertyAll(EdgeInsets.all(0)),
                           ),
                           onPressed: () {},
-                          child:commonTextStartAlign(title: resendOTP, style: textStyle_14_400_0461E5),)
+                          child: commonTextStartAlign(
+                            title: resendOTP,
+                            style: textStyle_14_400_0461E5,
+                          ),
+                        ),
                       ],
                     ),
-                  )
+                  ),
                 ],
               ),
             ),

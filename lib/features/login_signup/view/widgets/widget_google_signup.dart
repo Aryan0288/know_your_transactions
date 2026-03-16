@@ -12,16 +12,19 @@ class GoogleSignUpWidget extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: textColor_F5F9FF,
-        borderRadius: BorderRadius.circular(16)
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16,horizontal: 28),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 28),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset(PngImages.googlePng,width: 20),
+            Image.asset(PngImages.googlePng, width: 20),
             ws(16),
-            commonTextCenterAlign(title: google, style: textStyle_14_700_72788C),
+            commonTextCenterAlign(
+              title: google,
+              style: textStyle_14_700_72788C,
+            ),
           ],
         ),
       ),

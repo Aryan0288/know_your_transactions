@@ -3,19 +3,25 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class CustomDialogs {
-  static void showSignInRequiredDialog(BuildContext context, {required VoidCallback onSignInTap}) {
+  static void showSignInRequiredDialog(
+    BuildContext context, {
+    required VoidCallback onSignInTap,
+  }) {
     showDialog(
       context: context,
       barrierDismissible: true,
       builder: (BuildContext context) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28.0)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28.0),
+          ),
           elevation: 0,
           backgroundColor: Colors.transparent,
           child: _awesomeDialogContent(
             context,
             title: "Sign In Required",
-            description: "To keep your expenses organized and synced, you need to sign in first.",
+            description:
+                "To keep your expenses organized and synced, you need to sign in first.",
             icon: Icons.lock_person_rounded,
             primaryButtonText: "Sign In Now",
             onPrimaryButtonPressed: () {
@@ -33,27 +39,33 @@ class CustomDialogs {
     );
   }
 
-  static void showEmailVerificationDialog(BuildContext context, {required User user}) {
+  static void showEmailVerificationDialog(
+    BuildContext context, {
+    required User user,
+  }) {
     showDialog(
       context: context,
       barrierDismissible: true,
       builder: (BuildContext context) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28.0)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28.0),
+          ),
           elevation: 0,
           backgroundColor: Colors.transparent,
           child: _awesomeDialogContent(
             context,
             title: "Verify Your Email",
-            description: "We've sent a verification link to **${user.email}**. Please verify your email to access all features.",
+            description:
+                "We've sent a verification link to **${user.email}**. Please verify your email to access all features.",
             icon: Icons.mark_email_unread_rounded,
             primaryButtonText: "Resend Email",
             onPrimaryButtonPressed: () async {
               try {
                 await user.sendEmailVerification();
                 if (context.mounted) {
-                   Navigator.pop(context);
-                   ScaffoldMessenger.of(context).showSnackBar(
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text("Verification email sent!"),
                       backgroundColor: Color(0xFF429690),
@@ -62,7 +74,7 @@ class CustomDialogs {
                 }
               } catch (e) {
                 if (context.mounted) {
-                   ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text("Error: ${e.toString()}"),
                       backgroundColor: Colors.redAccent,
@@ -82,13 +94,18 @@ class CustomDialogs {
     );
   }
 
-  static void showLogoutDialog(BuildContext context, {required VoidCallback onConfirm}) {
+  static void showLogoutDialog(
+    BuildContext context, {
+    required VoidCallback onConfirm,
+  }) {
     showDialog(
       context: context,
       barrierDismissible: true,
       builder: (BuildContext context) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28.0)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28.0),
+          ),
           elevation: 0,
           backgroundColor: Colors.transparent,
           child: _awesomeDialogContent(
@@ -146,11 +163,7 @@ class CustomDialogs {
               shape: BoxShape.circle,
               border: Border.all(color: color.withOpacity(0.2), width: 2),
             ),
-            child: Icon(
-              icon,
-              size: 40,
-              color: color,
-            ),
+            child: Icon(icon, size: 40, color: color),
           ),
           const SizedBox(height: 24),
           Text(
@@ -181,7 +194,7 @@ class CustomDialogs {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(color: Colors.grey[300]!),
+                      side:  BorderSide(color: Colors.grey[300]!),
                     ),
                   ),
                   child: Text(
@@ -220,6 +233,41 @@ class CustomDialogs {
           ),
         ],
       ),
+    );
+  }
+
+  static void showLoadingDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          backgroundColor: Colors.white,
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(color: Color(0xFF429690)),
+                const SizedBox(width: 24),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: GoogleFonts.manrope(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF1E1E1E),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

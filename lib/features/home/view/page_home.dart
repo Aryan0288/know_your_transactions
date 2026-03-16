@@ -108,43 +108,44 @@ class _OnboardingPageState extends State<HomePage> {
             ),
           ),
 
-
           hs(32),
           Padding(
-            padding: const EdgeInsets.only(left: 24,right: 24),
+            padding: const EdgeInsets.only(left: 24, right: 24),
             child: Column(
               children: [
                 commonTextCenterAlign(
                   title: spendSmarter,
                   style: headingTextStyle_438883,
-                )
+                ),
               ],
             ),
           ),
-
-
         ],
       ),
 
-        bottomNavigationBar: Padding(
-          padding: EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              elevatedButton(
-                color: textColor_3E7C78,
-                shadowColor: textColor_69AEA9,
-                borderRadius: 40,
-                onPressed: () {
-                  // Navigate to next screen
-                  Navigator.push(context, MaterialPageRoute(builder: (context)=>AddExpensePageHomePage()));
-                },
-                title: getStart,
-              )
-            ],
-          ),
-        )
+      bottomNavigationBar: Padding(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            elevatedButton(
+              color: textColor_3E7C78,
+              shadowColor: textColor_69AEA9,
+              borderRadius: 40,
+              onPressed: () {
+                // Navigate to next screen
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AddExpensePageHomePage(),
+                  ),
+                );
+              },
+              title: getStart,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
-
