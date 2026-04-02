@@ -1,0 +1,8 @@
+Variant: debugAndroidTest
+Config: debug
+Store: /Users/aryan/.android/debug.keystore
+Alias: AndroidDebugKey
+MD5: 34:90:21:DD:14:02:31:17:51:E2:76:2E:B3:EE:EC:97
+SHA1: 5F:31:AE:75:A4:6C:4F:F4:01:7D:D9:D2:B9:FA:CA:8B:F7:D6:CD:DB
+SHA-256: 2E:43:AA:1B:82:B1:2E:0A:96:8F:B4:77:14:20:AB:A5:1B:B1:69:EA:1F:6E:FE:42:35:54:18:AC:6E:EF:9B:5E
+Valid until: Friday, 29 January, 2055

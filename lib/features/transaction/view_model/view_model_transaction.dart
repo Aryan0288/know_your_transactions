@@ -145,7 +145,7 @@ final transactionStatsProvider = Provider<TransactionStats>((ref) {
   }
 
   return TransactionStats(
-    totalBalance: totalIncome - totalExpense,
+    totalBalance: totalExpense,
     totalIncome: totalIncome,
     totalExpense: totalExpense,
   );

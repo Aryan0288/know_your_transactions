@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_home.dart';
 import 'package:know_your_expenses/features/login_signup/model/model_auth.dart';
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
@@ -107,23 +108,89 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  Future<bool> signInWithGoogle() async {
+    try {
+      state = state.copyWith(isLoading: true, error: null);
+
+      print("call signIn func with google");
+      final googleSignIn = GoogleSignIn();
+      print("googleSignIn ---- $googleSignIn");
+      final googleUser = await googleSignIn.signIn();
+      print("googleUser ---- $googleUser");
+
+      if (googleUser == null) {
+        state = state.copyWith(isLoading: false, error: null);
+        return false;
+      }
+
+      final googleAuth = await googleUser.authentication;
+
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+        accessToken: googleAuth.accessToken,
+      );
+
+      final userCredential = await _auth.signInWithCredential(credential);
+      final user = userCredential.user;
+
+      if (user != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        if (!userDoc.exists) {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .set({
+                'name': user.displayName ?? googleUser.displayName ?? 'Google User',
+                'email': user.email ?? googleUser.email,
+                'phone': '',
+                'photoUrl': user.photoURL ?? googleUser.photoUrl,
+                'createdAt': FieldValue.serverTimestamp(),
+              });
+        }
+      }
+
+      state = state.copyWith(isLoading: false, error: null);
+      return true;
+    } catch (e,stackTrace) {
+      print("");
+      print("");
+      print("");
+      print("");
+      print("Google sign-in error: $e");        // Add this
+      print("Stack trace: $stackTrace");
+      print("");
+      print("");
+      print("");
+      print("");
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Google sign-in failed. Please try again.',
+      );
+      return false;
+    }
+  }
+
   Future<bool> resetPassword(String email) async {
     try {
       state = state.copyWith(isLoading: true, error: null);
-      
+
       await _auth.sendPasswordResetEmail(email: email);
-      
+
       state = state.copyWith(isLoading: false);
       return true;
     } on FirebaseAuthException catch (e) {
       String message = "Failed to send reset email";
-      
+
       if (e.code == 'user-not-found') {
         message = "No account found for this email.";
       } else if (e.code == 'invalid-email') {
         message = "Invalid email format.";
       }
-      
+
       state = state.copyWith(isLoading: false, error: message);
       return false;
     } catch (e) {
@@ -142,6 +209,7 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> signOut() async {
     await _auth.signOut();
+    await GoogleSignIn().signOut();
     ref.read(bottomNavIndexProvider.notifier).state = 0;
   }
 }

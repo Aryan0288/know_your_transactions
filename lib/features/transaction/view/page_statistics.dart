@@ -1,91 +1,243 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:know_your_expenses/features/common_widgets/common_colors.dart';
-import 'package:know_your_expenses/features/common_widgets/common_widgets.dart';
-import 'package:know_your_expenses/features/common_widgets/common_widgets_scaffold.dart';
 import 'package:know_your_expenses/features/transaction/model/model_transaction.dart';
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
 
-class StatisticsPage extends ConsumerWidget {
+// ─── Colours ──────────────────────────────────────────────────────────────────
+const _kGreen = Color(0xFF2E8B57);
+const _kLightGreen = Color(0xFF3EAF78);
+const _kDeepGreen = Color(0xFF1A5C3A);
+const _kTeal = Color(0xFF3E7C78);
+
+// ─── Pie palette ──────────────────────────────────────────────────────────────
+const _vibrantColors = [
+  Color(0xFF3E7C78),
+  Color(0xFFFFA726),
+  Color(0xFF66BB6A),
+  Color(0xFFAB47BC),
+  Color(0xFFEC407A),
+  Color(0xFF26C6DA),
+  Color(0xFF5C6BC0),
+];
+
+// ─── Statistics Page ──────────────────────────────────────────────────────────
+class StatisticsPage extends ConsumerStatefulWidget {
   const StatisticsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return CommonScaffold(
-      backgroundColor: Colors.white,
-      appBar: appBarWithoutProgress(
-        context,
-        appBarTitle: "Statistics",
-        appBarColor: Colors.white,
-        icon: Icon(Icons.arrow_back_ios_new, size: 20, color: textColor_181636),
-        appBarTitleStyle: appBarTitleTextStyle.copyWith(
-          fontSize: 18,
-          color: textColor_181636,
-        ),
-        onPressed: () => ref.read(bottomNavIndexProvider.notifier).state = 0,
-        actions: [
-          IconButton(
-            onPressed: () {
-              // Handle download
-            },
-            icon: Icon(Icons.download_outlined, color: textColor_181636),
+  ConsumerState<StatisticsPage> createState() => _StatisticsPageState();
+}
+
+class _StatisticsPageState extends ConsumerState<StatisticsPage>
+    with TickerProviderStateMixin {
+  late AnimationController _entranceController;
+
+  late Animation<Offset> _headerSlide;
+  late Animation<double> _headerOpacity;
+  late Animation<Offset> _contentSlide;
+  late Animation<double> _contentOpacity;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _entranceController = AnimationController(
+      duration: const Duration(milliseconds: 900),
+      vsync: this,
+    );
+
+    _headerSlide =
+        Tween<Offset>(begin: const Offset(0, -0.25), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _entranceController,
+            curve: const Interval(0.0, 0.55, curve: Curves.easeOut),
           ),
-          ws(10),
-        ],
+        );
+
+    _headerOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: const Interval(0.0, 0.4, curve: Curves.easeIn),
       ),
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-              child: Consumer(
-                builder: (context, ref, child) {
-                  final selectedPeriod = ref.watch(selectedPeriodProvider);
-                  final topSpending = ref.watch(topSpendingProvider);
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildPeriodSelector(ref, selectedPeriod),
-                      hs(24),
-                      _buildExpenseDropdown(),
-                      hs(20),
-                      _buildChartSection(
-                        context,
-                        ref,
-                        selectedPeriod,
-                        topSpending,
-                      ),
-                      hs(52),
-                      _buildTopSpendingHeader(),
-                      hs(20),
-                    ],
-                  );
-                },
+    );
+
+    _contentSlide = Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _entranceController,
+            curve: const Interval(0.25, 1.0, curve: Curves.easeOut),
+          ),
+        );
+
+    _contentOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: const Interval(0.25, 0.75, curve: Curves.easeIn),
+      ),
+    );
+
+    _entranceController.forward();
+  }
+
+  @override
+  void dispose() {
+    _entranceController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF0FAF4),
+      extendBodyBehindAppBar: true,
+      body: Column(
+        children: [
+          // ── Gradient Header ────────────────────────────────────────────
+          SlideTransition(
+            position: _headerSlide,
+            child: FadeTransition(
+              opacity: _headerOpacity,
+              child: _buildHeader(),
+            ),
+          ),
+
+          // ── Scrollable body ────────────────────────────────────────────
+          Expanded(
+            child: SlideTransition(
+              position: _contentSlide,
+              child: FadeTransition(
+                opacity: _contentOpacity,
+                child: Consumer(
+                  builder: (context, ref, _) {
+                    final selectedPeriod = ref.watch(selectedPeriodProvider);
+                    final topSpending = ref.watch(topSpendingProvider);
+                    return ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+                      children: [
+                        _buildPeriodSelector(ref, selectedPeriod),
+                        const SizedBox(height: 16),
+                        _buildChartCard(context, ref, topSpending),
+                        const SizedBox(height: 20),
+                        _buildTopSpendingHeader(topSpending.length),
+                        const SizedBox(height: 12),
+                        ..._buildTopSpendingItems(topSpending),
+                      ],
+                    );
+                  },
+                ),
               ),
             ),
-            Expanded(
-              child: Consumer(
-                builder: (context, ref, child) {
-                  final topSpending = ref.watch(topSpendingProvider);
-                  return _buildTopSpendingList(topSpending);
-                },
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
+  // ─── Header ──────────────────────────────────────────────────────────────
+  Widget _buildHeader() {
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: const BorderRadius.only(
+            bottomLeft: Radius.circular(36),
+            bottomRight: Radius.circular(36),
+          ),
+          child: Container(
+            height: 148,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [_kDeepGreen, _kGreen, _kLightGreen],
+              ),
+            ),
+            child: Stack(
+              children: [
+                Positioned(
+                  top: -20,
+                  right: -20,
+                  child: Container(
+                    width: 110,
+                    height: 110,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withOpacity(0.07),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: -25,
+                  left: 20,
+                  child: Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withOpacity(0.06),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        SafeArea(
+          bottom: false,
+          child: SizedBox(
+            height: 148,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 8,right: 8,bottom: 16),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () =>
+                        ref.read(bottomNavIndexProvider.notifier).state = 0,
+                    icon: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'Statistics',
+                    style: GoogleFonts.manrope(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const Spacer(),
+                  // Placeholder to balance the back button
+                  const SizedBox(width: 48),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── Period Selector ──────────────────────────────────────────────────────
   Widget _buildPeriodSelector(WidgetRef ref, StatisticsPeriod selectedPeriod) {
     return Container(
       height: 48,
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: _kGreen.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -98,10 +250,19 @@ class StatisticsPage extends ConsumerWidget {
                 left: _getLeftOffset(selectedPeriod, itemWidth),
                 child: Container(
                   width: itemWidth,
-                  height: 48,
+                  height: 40,
                   decoration: BoxDecoration(
-                    color: textColor_3E7C78.withOpacity(0.8),
-                    borderRadius: BorderRadius.circular(10),
+                    gradient: const LinearGradient(
+                      colors: [_kGreen, _kLightGreen],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _kGreen.withOpacity(0.35),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -111,23 +272,25 @@ class StatisticsPage extends ConsumerWidget {
                   return Expanded(
                     child: GestureDetector(
                       onTap: () {
+                        HapticFeedback.selectionClick();
                         ref.read(selectedPeriodProvider.notifier).state =
                             period;
                         ref.read(touchedIndexProvider.notifier).state = -1;
                       },
-
                       behavior: HitTestBehavior.opaque,
                       child: Center(
-                        child: Text(
-                          _getPeriodTitle(period),
-                          style: TextStyle(
-                            fontFamily: manRopeBold,
-                            color: isSelected ? Colors.white : textColor_55555A,
+                        child: AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 200),
+                          style: GoogleFonts.manrope(
+                            color: isSelected
+                                ? Colors.white
+                                : Colors.grey.shade500,
                             fontWeight: isSelected
-                                ? FontWeight.bold
+                                ? FontWeight.w700
                                 : FontWeight.w500,
-                            fontSize: 14,
+                            fontSize: 13,
                           ),
+                          child: Text(_getPeriodTitle(period)),
                         ),
                       ),
                     ),
@@ -157,41 +320,20 @@ class StatisticsPage extends ConsumerWidget {
   String _getPeriodTitle(StatisticsPeriod period) {
     switch (period) {
       case StatisticsPeriod.day:
-        return "Day";
+        return 'Day';
       case StatisticsPeriod.week:
-        return "Week";
+        return 'Week';
       case StatisticsPeriod.month:
-        return "Month";
+        return 'Month';
       case StatisticsPeriod.year:
-        return "Year";
+        return 'Year';
     }
   }
 
-  Widget _buildExpenseDropdown() {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade300),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text("Expense", style: textStyle_14_400_55555A),
-            ws(4),
-            // Icon(Icons.keyboard_arrow_down, color: textColor_55555A, size: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChartSection(
+  // ─── Chart Card ───────────────────────────────────────────────────────────
+  Widget _buildChartCard(
     BuildContext context,
     WidgetRef ref,
-    StatisticsPeriod period,
     List<TransactionModel> transactions,
   ) {
     final touchedIndex = ref.watch(touchedIndexProvider);
@@ -203,104 +345,197 @@ class StatisticsPage extends ConsumerWidget {
           (categoryTotals[t.categoryName] ?? 0) + t.amount;
     }
     final categories = categoryTotals.keys.toList();
-    final totalValue = categoryTotals.values.fold(
-      0.0,
-      (sum, item) => sum + item,
-    );
+    final totalValue = categoryTotals.values.fold(0.0, (s, v) => s + v);
 
-    String centerTitle = "Total";
-    String centerAmount = "\₹${totalValue.toStringAsFixed(0)}";
+    String centerTitle = 'Total';
+    String centerAmount = '₹${totalValue.toStringAsFixed(0)}';
 
-    double rotationOffset = -90;
     if (touchedIndex != -1 && touchedIndex < categories.length) {
       centerTitle = categories[touchedIndex];
-      centerAmount = "\₹${categoryTotals[centerTitle]!.toStringAsFixed(0)}";
-
-      // Calculate rotation to move selected slice to top (270 degrees)
-      double currentAngle = 0;
-      for (int i = 0; i < touchedIndex; i++) {
-        currentAngle += (categoryTotals[categories[i]]! / totalValue) * 360;
-      }
-      double sweepAngle =
-          (categoryTotals[categories[touchedIndex]]! / totalValue) * 360;
-      rotationOffset = 270 - (currentAngle + sweepAngle / 2);
+      centerAmount = '₹${categoryTotals[centerTitle]!.toStringAsFixed(0)}';
     }
 
-    return SizedBox(
-      height: 220,
-      width: double.infinity,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          PieChart(
-            PieChartData(
-              sectionsSpace: 4,
-              centerSpaceRadius: 65,
-              startDegreeOffset: ref.watch(rotationOffsetProvider),
-              sections: _generatePieSections(transactions, ref),
-              pieTouchData: PieTouchData(
-                enabled: true,
-                touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                  final rotationNotifier = ref.read(
-                    rotationOffsetProvider.notifier,
-                  );
-
-                  // 🔄 Rotate chart while dragging
-                  if (event is FlPanUpdateEvent) {
-                    rotationNotifier.state += event.details.delta.dx;
-                  }
-
-                  // 👆 Select slice on tap
-                  if (event is FlTapUpEvent) {
-                    if (pieTouchResponse == null ||
-                        pieTouchResponse.touchedSection == null) {
-                      ref.read(touchedIndexProvider.notifier).state = -1;
-                      return;
-                    }
-
-                    ref.read(touchedIndexProvider.notifier).state =
-                        pieTouchResponse.touchedSection!.touchedSectionIndex;
-                  }
-                },
-              ),
-            ),
-            duration: const Duration(milliseconds: 600),
-            curve: Curves.decelerate,
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: _kGreen.withOpacity(0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
           ),
-
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            child: GestureDetector(
-              onTap: () {
-                ref.read(touchedIndexProvider.notifier).state = -1;
-              },
-              child: Column(
-                key: ValueKey(centerTitle + centerAmount),
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    centerTitle,
-                    style: textStyle_14_600_181636.copyWith(
-                      color: touchedIndex != -1
-                          ? textColor_3E7C78
-                          : textColor_181636.withOpacity(0.6),
-                      fontWeight: touchedIndex != -1
-                          ? FontWeight.bold
-                          : FontWeight.w400,
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Expense Breakdown',
+                style: GoogleFonts.manrope(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF1E2D2C),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                'Drag · Tap slice',
+                style: GoogleFonts.manrope(
+                  fontSize: 10,
+                  color: Colors.grey.shade400,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 44),
+          if (totalValue == 0)
+            SizedBox(
+              height: 180,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.pie_chart_outline_rounded,
+                      size: 48,
+                      color: Colors.grey.shade300,
                     ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'No expenses in this period',
+                      style: GoogleFonts.manrope(
+                        fontSize: 13,
+                        color: Colors.grey.shade400,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            SizedBox(
+              height: 220,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  PieChart(
+                    PieChartData(
+                      sectionsSpace: 4,
+                      centerSpaceRadius: 65,
+                      startDegreeOffset: ref.watch(rotationOffsetProvider),
+                      sections: _generatePieSections(transactions, ref),
+                      pieTouchData: PieTouchData(
+                        enabled: true,
+                        touchCallback: (FlTouchEvent event, response) {
+                          final rotationNotifier = ref.read(
+                            rotationOffsetProvider.notifier,
+                          );
+                          if (event is FlPanUpdateEvent) {
+                            rotationNotifier.state += event.details.delta.dx;
+                          }
+                          if (event is FlTapUpEvent) {
+                            if (response == null ||
+                                response.touchedSection == null) {
+                              ref.read(touchedIndexProvider.notifier).state =
+                                  -1;
+                              return;
+                            }
+                            ref.read(touchedIndexProvider.notifier).state =
+                                response.touchedSection!.touchedSectionIndex;
+                          }
+                        },
+                      ),
+                    ),
+                    duration: const Duration(milliseconds: 600),
+                    curve: Curves.decelerate,
                   ),
-                  Text(
-                    centerAmount,
-                    style: appBarTitleTextStyle.copyWith(
-                      fontSize: touchedIndex != -1 ? 24 : 22,
-                      color: textColor_181636,
-                      fontWeight: FontWeight.bold,
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: GestureDetector(
+                      onTap: () =>
+                          ref.read(touchedIndexProvider.notifier).state = -1,
+                      child: Column(
+                        key: ValueKey('$centerTitle$centerAmount'),
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            centerTitle,
+                            style: GoogleFonts.manrope(
+                              fontSize: 12,
+                              color: touchedIndex != -1
+                                  ? _kTeal
+                                  : Colors.grey.shade500,
+                              fontWeight: touchedIndex != -1
+                                  ? FontWeight.w700
+                                  : FontWeight.w400,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            centerAmount,
+                            style: GoogleFonts.manrope(
+                              fontSize: touchedIndex != -1 ? 22 : 20,
+                              fontWeight: FontWeight.w900,
+                              color: const Color(0xFF1E2D2C),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
+
+          // Legend
+          if (totalValue > 0 && categories.isNotEmpty) ...[
+            const SizedBox(height: 34),
+            Wrap(
+              spacing: 10,
+              runSpacing: 6,
+              children: List.generate(categories.length, (i) {
+                final isActive = touchedIndex == -1 || touchedIndex == i;
+                return GestureDetector(
+                  onTap: () {
+                    ref.read(touchedIndexProvider.notifier).state =
+                        touchedIndex == i ? -1 : i;
+                  },
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    opacity: isActive ? 1.0 : 0.3,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: _vibrantColors[i % _vibrantColors.length],
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          categories[i],
+                          style: GoogleFonts.manrope(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF3A4A48),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ],
         ],
       ),
     );
@@ -323,42 +558,23 @@ class StatisticsPage extends ConsumerWidget {
       categoryColors[t.categoryName] = t.color;
     }
 
-    final totalValue = categoryTotals.values.fold(
-      0.0,
-      (sum, item) => sum + item,
-    );
+    final totalValue = categoryTotals.values.fold(0.0, (s, v) => s + v);
     final categories = categoryTotals.keys.toList();
-
-    // Premium Color Palette
-    final vibrantColors = [
-      const Color(0xFF3E7C78), // Original Teal
-      const Color(0xFFFFA726), // Orange
-      const Color(0xFF66BB6A), // Green
-      const Color(0xFFAB47BC), // Purple
-      const Color(0xFFEC407A), // Pink
-      const Color(0xFF26C6DA), // Cyan
-      const Color(0xFF5C6BC0), // Indigo
-    ];
 
     return List.generate(categories.length, (i) {
       final category = categories[i];
       final value = categoryTotals[category]!;
       final isTouched = i == touchedIndex;
-
-      final radius = isTouched ? 80.0 : 70.0;
-      final color = vibrantColors[i % vibrantColors.length];
-      final rawPercentage = (value / totalValue * 100);
-
-      // Ensure a minimum slice visibility for small values (2% minimum visual width)
+      final color = _vibrantColors[i % _vibrantColors.length];
+      final rawPercentage = value / totalValue * 100;
       final renderValue = rawPercentage < 2 ? (totalValue * 0.02) : value;
 
-      // Smart Percentage Formatting:
       String displayPercentage;
       if (rawPercentage == 0) {
-        displayPercentage = "0";
+        displayPercentage = '0';
       } else if (rawPercentage < 1.0) {
         displayPercentage = rawPercentage.toStringAsFixed(1);
-        if (displayPercentage == "0.0") {
+        if (displayPercentage == '0.0') {
           displayPercentage = rawPercentage.toStringAsFixed(2);
         }
       } else {
@@ -369,29 +585,26 @@ class StatisticsPage extends ConsumerWidget {
         color: color,
         value: renderValue,
         showTitle: isTouched || rawPercentage > 0,
-        title: isTouched ? "" : '$displayPercentage%',
-        radius: radius,
-        titleStyle: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
+        title: isTouched ? '' : '$displayPercentage%',
+        radius: isTouched ? 80.0 : 70.0,
+        titleStyle: GoogleFonts.manrope(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
           color: Colors.white,
-          fontFamily: manRopeBold,
         ),
         badgeWidget: TweenAnimationBuilder<double>(
           tween: Tween<double>(begin: 0, end: isTouched ? 1.0 : 0.0),
           duration: const Duration(milliseconds: 500),
           curve: Curves.easeOutBack,
-          builder: (context, animValue, child) {
-            return Transform.scale(
-              scale: animValue,
-              child: Opacity(opacity: animValue.clamp(0.0, 1.0), child: child),
-            );
-          },
+          builder: (context, animValue, child) => Transform.scale(
+            scale: animValue,
+            child: Opacity(opacity: animValue.clamp(0.0, 1.0), child: child),
+          ),
           child: Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
             decoration: BoxDecoration(
               color: Colors.white,
-              shape: BoxShape.circle,
+              borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.15),
@@ -402,11 +615,10 @@ class StatisticsPage extends ConsumerWidget {
             ),
             child: Text(
               '$displayPercentage%',
-              style: TextStyle(
+              style: GoogleFonts.manrope(
                 color: color,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w800,
                 fontSize: 11,
-                fontFamily: manRopeBold,
               ),
             ),
           ),
@@ -416,50 +628,100 @@ class StatisticsPage extends ConsumerWidget {
     });
   }
 
-  Widget _buildTopSpendingHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          "Top Spending",
-          style: appBarTitleTextStyle.copyWith(
-            fontSize: 18,
-            color: Colors.black,
+  // ─── Top Spending Header ──────────────────────────────────────────────────
+  Widget _buildTopSpendingHeader(int count) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 20,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [_kLightGreen, _kDeepGreen],
+              ),
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
-        ),
-        Icon(Icons.swap_vert, color: Colors.grey.shade600),
-      ],
+          const SizedBox(width: 10),
+          Text(
+            'Top Spending',
+            style: GoogleFonts.manrope(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF1E2D2C),
+            ),
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: _kGreen.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '$count items',
+              style: GoogleFonts.manrope(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: _kGreen,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildTopSpendingList(List<TransactionModel> transactions) {
+  // ─── Top Spending Items ───────────────────────────────────────────────────
+  List<Widget> _buildTopSpendingItems(List<TransactionModel> transactions) {
     if (transactions.isEmpty) {
-      return Center(
-        child: Text("No data found", style: textStyle_14_400_55555A),
-      );
+      return [
+        Padding(
+          padding: const EdgeInsets.only(top: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.receipt_long_outlined,
+                size: 48,
+                color: Colors.grey.shade300,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'No data found',
+                style: GoogleFonts.manrope(
+                  fontSize: 14,
+                  color: Colors.grey.shade400,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ];
     }
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-      itemCount: transactions.length,
-      separatorBuilder: (context, index) => hs(16),
-      itemBuilder: (context, index) {
-        final t = transactions[index];
-        bool isSelected =
-            index == 1; // Just for "wow" matching the image teal highlight
-        return Container(
-          padding: const EdgeInsets.all(12),
+
+    final items = <Widget>[];
+    for (int index = 0; index < transactions.length; index++) {
+      final t = transactions[index];
+      if (index > 0) items.add(const SizedBox(height: 10));
+      items.add(
+        Container(
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: isSelected ? textColor_3E7C78 : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: isSelected
-                ? []
-                : [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Row(
             children: [
@@ -467,49 +729,61 @@ class StatisticsPage extends ConsumerWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: isSelected
-                      ? Colors.white.withOpacity(0.2)
-                      : Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(12),
+                  color: t.color.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(t.icon, color: isSelected ? Colors.white : t.color),
+                child: Icon(t.icon, color: t.color, size: 24),
               ),
-              ws(16),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       t.categoryName,
-                      style: appBarTitleTextStyle.copyWith(
-                        color: isSelected ? Colors.white : textColor_181636,
-                        fontSize: 16,
+                      style: GoogleFonts.manrope(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1E2D2C),
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       DateFormat('MMM d, yyyy').format(t.date),
-                      style: textStyle_12_400_55555A.copyWith(
-                        color: isSelected ? Colors.white70 : textColor_55555A,
+                      style: GoogleFonts.manrope(
+                        fontSize: 12,
+                        color: Colors.grey.shade400,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
                 ),
               ),
-              Text(
-                "- \$${t.amount.toStringAsFixed(2)}",
-                style: appBarTitleTextStyle.copyWith(
-                  color: isSelected ? Colors.white : textColor_EA3636,
-                  fontSize: 16,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEA3636).withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '-₹${t.amount.toStringAsFixed(2)}',
+                  style: GoogleFonts.manrope(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFFEA3636),
+                  ),
                 ),
               ),
             ],
           ),
-        );
-      },
-    );
+        ),
+      );
+    }
+    return items;
   }
 }
 
+// ─── Keep for backward compatibility ─────────────────────────────────────────
 AppBar appBarWithoutProgress(
   BuildContext context, {
   required String appBarTitle,

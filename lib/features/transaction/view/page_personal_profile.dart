@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:know_your_expenses/features/login_signup/view/page_sign_in.dart';
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
 import 'package:know_your_expenses/core/widgets/custom_dialogs.dart';
-import 'package:cloudinary_flutter/cloudinary_context.dart';
-import 'package:cloudinary_flutter/image/cld_image.dart';
-import 'package:cloudinary_url_gen/transformation/transformation.dart';
-import 'package:cloudinary_url_gen/transformation/resize/resize.dart';
-import 'package:cloudinary_url_gen/transformation/effect/effect.dart';
 
 import 'package:know_your_expenses/features/home/view_model/view_model_home.dart';
 
@@ -19,167 +15,399 @@ class PersonalProfilePage extends ConsumerWidget {
     final userDataAsync = ref.watch(userDataProvider);
     final user = ref.watch(firebaseAuthProvider).currentUser;
 
+    final isLoggedOut = userDataAsync.value == null || user == null;
+
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text(
-          'Personal Profile',
-          style: GoogleFonts.manrope(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: const Color(0xFF1E1E1E),
-          ),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF1E1E1E)),
-      ),
+      backgroundColor: const Color(0xFFF2F5F8),
+      appBar: isLoggedOut
+          ? AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF1A2332)),
+                onPressed: () => Navigator.pop(context),
+              ),
+            )
+          : null,
       body: userDataAsync.when(
         data: (userData) {
           if (userData == null || user == null) {
-            return const Center(
-              child: Text("Please sign in to view your profile"),
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2E8B57).withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.person_outline_rounded,
+                      size: 40,
+                      color: Color(0xFF2E8B57),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'You\'re not signed in',
+                    style: GoogleFonts.manrope(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1A2332),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Sign in to view your profile',
+                    style: GoogleFonts.manrope(
+                      fontSize: 13,
+                      color: Colors.grey.shade500,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  ElevatedButton(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => SignInPage()),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E8B57),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      'Sign In',
+                      style: GoogleFonts.manrope(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             );
           }
           final userName = userData['name'] ?? 'Guest User';
           final userEmail = userData['email'] ?? 'No email';
           final userPhone = userData['phone'] ?? 'No phone number';
           final photoUrl = userData['photoUrl'];
-          
-          // Since we hardcoded the upload public_id as 'profile_${user.uid}'
-          // We can just construct it here if the user has a photoUrl
-          // final String? publicId = photoUrl != null ? 'profile_${user.uid}' : null;
 
-          return SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 20),
-                  Stack(
-                    alignment: Alignment.bottomRight,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 10,
-                              offset: const Offset(0, 5),
-                            ),
-                          ],
-                        ),
-                        child: CircleAvatar(
-                          radius: 50,
-                          backgroundColor: Colors.grey[200],
-                          child: photoUrl != null
-                              ? ClipOval(
-                                  child: Image.network(photoUrl),
-                                )
-                              : const Icon(
-                                  Icons.person,
-                                  size: 50,
-                                  color: Colors.grey,
-                                ),
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () async {
-                          CustomDialogs.showLoadingDialog(
-                            context,
-                            "Updating Image...",
+          return CustomScrollView(
+            slivers: [
+              SliverAppBar(
+                expandedHeight: 260,
+                floating: false,
+                pinned: true,
+                backgroundColor: const Color(0xFF2E7D79),
+                iconTheme: const IconThemeData(color: Colors.white),
+                title: Text(
+                  'Personal Profile',
+                  style: GoogleFonts.manrope(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                flexibleSpace: FlexibleSpaceBar(
+                  collapseMode: CollapseMode.parallax,
+                  background: _ProfileHeader(
+                    userName: userName,
+                    userEmail: userEmail,
+                    photoUrl: photoUrl,
+                    onCameraTap: () async {
+                      CustomDialogs.showLoadingDialog(context, "Updating Image...");
+                      final success = await ref
+                          .read(transactionViewModelProvider.notifier)
+                          .updateProfileImage();
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        if (!success) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Failed to update image.')),
                           );
-                          final success = await ref
-                              .read(transactionViewModelProvider.notifier)
-                              .updateProfileImage();
-                          if (context.mounted) {
-                            Navigator.pop(context); // loading dialog
-                            if (!success) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Failed to update image.'),
-                                ),
-                              );
-                            }
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF429690),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.camera_alt,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                      ),
+                        }
+                      }
+                    },
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _sectionLabel('Profile Details'),
+                      const SizedBox(height: 12),
+                      _buildInfoCard([
+                        _buildProfileRow('Full Name', userName, Icons.person_outline),
+                        _buildDivider(),
+                        _buildProfileRow('Email Address', userEmail, Icons.email_outlined),
+                        _buildDivider(),
+                        _buildProfileRow('Phone Number', userPhone, Icons.phone_outlined),
+                      ]),
+                      const SizedBox(height: 28),
+                      _sectionLabel('Account'),
+                      const SizedBox(height: 12),
+                      _buildInfoCard([
+                        _buildProfileRow('Member Since', _formatDate(user.metadata.creationTime), Icons.calendar_today_outlined),
+                      ]),
                     ],
                   ),
-                  const SizedBox(height: 40),
-                  _buildProfileField('Name', userName, Icons.person_outline),
-                  _buildProfileField('Email', userEmail, Icons.email_outlined),
-                  _buildProfileField(
-                    'Phone Number',
-                    userPhone,
-                    Icons.phone_outlined,
-                  ),
-                ],
+                ),
               ),
-            ),
+            ],
           );
         },
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: Color(0xFF429690)),
-        ),
+        loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF429690))),
         error: (error, stack) => Center(child: Text('Error: $error')),
       ),
     );
   }
 
-  Widget _buildProfileField(String label, String value, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.manrope(
-              fontSize: 14,
-              color: const Color(0xFF666666),
-              fontWeight: FontWeight.w500,
-            ),
+  String _formatDate(DateTime? dt) {
+    if (dt == null) return 'Unknown';
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
+  }
+
+  Widget _sectionLabel(String label) {
+    return Text(
+      label.toUpperCase(),
+      style: GoogleFonts.manrope(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        color: const Color(0xFF9BA5B4),
+        letterSpacing: 1.0,
+      ),
+    );
+  }
+
+  Widget _buildInfoCard(List<Widget> children) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
-          const SizedBox(height: 8),
+        ],
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildDivider() {
+    return const Padding(
+      padding: EdgeInsets.only(left: 72),
+      child: Divider(height: 1, color: Color(0xFFF0F0F0)),
+    );
+  }
+
+  Widget _buildProfileRow(String label, String value, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      child: Row(
+        children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-              color: const Color(0xFFFAFAFA),
+              gradient: const LinearGradient(
+                colors: [Color(0xFF56C1BB), Color(0xFF2E7D79)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFF0F0F0)),
             ),
-            child: Row(
+            child: Icon(icon, color: Colors.white, size: 18),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(icon, color: const Color(0xFF429690), size: 22),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    value,
-                    style: GoogleFonts.manrope(
-                      fontSize: 16,
-                      color: const Color(0xFF1E1E1E),
-                      fontWeight: FontWeight.w600,
-                    ),
+                Text(
+                  label,
+                  style: GoogleFonts.manrope(
+                    fontSize: 11,
+                    color: const Color(0xFF9BA5B4),
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  style: GoogleFonts.manrope(
+                    fontSize: 15,
+                    color: const Color(0xFF1A2332),
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileHeader extends StatelessWidget {
+  final String userName;
+  final String userEmail;
+  final String? photoUrl;
+  final VoidCallback onCameraTap;
+
+  const _ProfileHeader({
+    required this.userName,
+    required this.userEmail,
+    required this.photoUrl,
+    required this.onCameraTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF4DBDB7), Color(0xFF1F6461)],
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -50,
+            right: -50,
+            child: Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.06),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -30,
+            left: -30,
+            child: Container(
+              width: 160,
+              height: 160,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.05),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 80,
+            left: 30,
+            child: Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.04),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(height: 16),
+                  Stack(
+                    alignment: Alignment.bottomRight,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const LinearGradient(
+                            colors: [Colors.white, Color(0xFFB2DFDB)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.25),
+                              blurRadius: 24,
+                              spreadRadius: 2,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: CircleAvatar(
+                          radius: 52,
+                          backgroundColor: const Color(0xFFE0F2F1),
+                          child: photoUrl != null
+                              ? ClipOval(
+                                  child: Image.network(
+                                    photoUrl!,
+                                    width: 104,
+                                    height: 104,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : const Icon(Icons.person_rounded, size: 52, color: Color(0xFF429690)),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: onCameraTap,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF2E7D79), size: 18),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    userName,
+                    style: GoogleFonts.manrope(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    userEmail,
+                    style: GoogleFonts.manrope(
+                      fontSize: 13,
+                      color: Colors.white.withOpacity(0.75),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
             ),
           ),
         ],

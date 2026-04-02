@@ -12,7 +12,20 @@
           "package_name": "com.anuj.knowyourexpenses"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "89507154805-beaqcd6vetdtas4t6iqmjmeabbrvilhn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.anuj.knowyourexpenses",
+            "certificate_hash": "5f31ae75a46c4ff4017dd9d2b9faca8bf7d6cddb"
+          }
+        },
+        {
+          "client_id": "89507154805-kvcse5h6nsskmncosjvejjqi1il1ace4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBGqEiXAbRCyW2e4tttA-i_rOYJvVFmJWY"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "89507154805-kvcse5h6nsskmncosjvejjqi1il1ace4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
