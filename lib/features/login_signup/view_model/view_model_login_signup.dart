@@ -97,6 +97,9 @@ class AuthController extends StateNotifier<AuthState> {
             'createdAt': FieldValue.serverTimestamp(),
           });
 
+      // Sign out immediately — user must verify email before accessing the app
+      await FirebaseAuth.instance.signOut();
+
       state = state.copyWith(isLoading: false);
       return true;
     } on FirebaseAuthException catch (e) {

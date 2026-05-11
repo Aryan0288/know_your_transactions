@@ -1,4 +1,4 @@
-package com.example.know_your_expenses
+package com.anuj.knowyourexpenses
 
 import io.flutter.embedding.android.FlutterActivity
 

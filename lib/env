@@ -6,3 +6,16 @@ MD5: 34:90:21:DD:14:02:31:17:51:E2:76:2E:B3:EE:EC:97
 SHA1: 5F:31:AE:75:A4:6C:4F:F4:01:7D:D9:D2:B9:FA:CA:8B:F7:D6:CD:DB
 SHA-256: 2E:43:AA:1B:82:B1:2E:0A:96:8F:B4:77:14:20:AB:A5:1B:B1:69:EA:1F:6E:FE:42:35:54:18:AC:6E:EF:9B:5E
 Valid until: Friday, 29 January, 2055
+
+
+2E:43:AA:1B:82:B1:2E:0A:96:8F:B4:77:14:20:AB:A5:1B:B1:69:EA:1F:6E:FE:42:35:54:18:AC:6E:EF:9B:5E
+
+Copy the snippet below. This is an identifier that is unique to your account.
+
+CIPH46CQJMFVGAAAAAAAAAAAAA
+
+
+keytool -list -v -keystore android/know_your_expenses-upload.jks -alias upload
+
+ SHA1: CE:CA:0C:C4:E8:E4:1C:93:F9:5E:8A:B0:D4:6E:2D:9F:52:1F:E1:8F
+ SHA256: AE:81:9F:3B:DC:E9:79:53:64:80:69:DE:7B:9A:BB:99:9C:60:06:08:69:05:FE:4E:89:A2:E0:60:E8:88:B7:D7

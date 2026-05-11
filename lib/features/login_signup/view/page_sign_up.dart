@@ -160,8 +160,10 @@ class _SignUpPageState extends ConsumerState<SignUpPage>
     if (success) {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => AddExpensePageHomePage()),
-        (route) => route.isFirst,
+        MaterialPageRoute(
+          builder: (_) => const SignInPage(showVerificationBanner: true),
+        ),
+        (route) => false,
       );
     } else {
       Utils.showErrorToast(

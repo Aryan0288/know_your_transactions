@@ -1,7 +1,9 @@
 import 'dart:math';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:know_your_expenses/features/home/view/page_home.dart';
+import 'package:know_your_expenses/features/transaction/view/page_expense_transaction.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -127,10 +129,16 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
     _textController.forward();
     await Future.delayed(const Duration(milliseconds: 1600));
     if (mounted) {
+      final user = FirebaseAuth.instance.currentUser;
+      await user?.reload();
+      final destination = (user != null && (user.emailVerified || user.providerData.any((p) => p.providerId == 'google.com')))
+          ? AddExpensePageHomePage()
+          : const HomePage();
+
       Navigator.pushReplacement(
         context,
         PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const HomePage(),
+          pageBuilder: (_, __, ___) => destination,
           transitionDuration: const Duration(milliseconds: 700),
           transitionsBuilder: (_, animation, __, child) {
             return FadeTransition(

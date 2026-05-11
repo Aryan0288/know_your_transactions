@@ -22,7 +22,9 @@ const _kBorder = Color(0xFFE1ECFC);
 const _kBg = Color(0xFFF5F9FF);
 
 class SignInPage extends ConsumerStatefulWidget {
-  const SignInPage({super.key});
+  const SignInPage({super.key, this.showVerificationBanner = false});
+
+  final bool showVerificationBanner;
 
   @override
   ConsumerState<SignInPage> createState() => _SignInPageState();
@@ -46,6 +48,32 @@ class _SignInPageState extends ConsumerState<SignInPage>
   @override
   void initState() {
     super.initState();
+
+    if (widget.showVerificationBanner) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.mark_email_unread_outlined, color: Colors.white, size: 20),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Account created! Please verify your email before signing in.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF2E8B57),
+            duration: const Duration(seconds: 5),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      });
+    }
 
     _entranceController = AnimationController(
       duration: const Duration(milliseconds: 1000),
