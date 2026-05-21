@@ -57,7 +57,7 @@ class CustomDialogs {
             context,
             title: "Verify Your Email",
             description:
-                "We've sent a verification link to **${user.email}**. Please verify your email to access all features.",
+                "We've sent a verification link to ${user.email}. Please check your inbox (and spam folder) to verify your email.",
             icon: Icons.mark_email_unread_rounded,
             primaryButtonText: "Resend Email",
             onPrimaryButtonPressed: () async {
@@ -129,6 +129,69 @@ class CustomDialogs {
     );
   }
 
+  static void showSignupSuccessDialog(
+    BuildContext context, {
+    required VoidCallback onOkPressed,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28.0),
+          ),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          child: _awesomeDialogContent(
+            context,
+            title: "Account Created!",
+            description:
+                "We've sent a verification link to your email.\n\nPlease check your inbox (and spam folder) to verify your account before signing in.",
+            icon: Icons.mark_email_unread_rounded,
+            primaryButtonText: "Continue to Sign In",
+            onPrimaryButtonPressed: () {
+              Navigator.pop(context);
+              onOkPressed();
+            },
+            color: const Color(0xFF429690),
+          ),
+        );
+      },
+    );
+  }
+
+  static void showErrorDialog(
+    BuildContext context, {
+    required String title,
+    required String message,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28.0),
+          ),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          child: _awesomeDialogContent(
+            context,
+            title: title,
+            description: message,
+            icon: Icons.error_outline_rounded,
+            primaryButtonText: "OK",
+            onPrimaryButtonPressed: () {
+              Navigator.pop(context);
+            },
+            color: const Color(0xFFE57373),
+          ),
+        );
+      },
+    );
+  }
+
   static Widget _awesomeDialogContent(
     BuildContext context, {
     required String title,
@@ -136,8 +199,8 @@ class CustomDialogs {
     required IconData icon,
     required String primaryButtonText,
     required VoidCallback onPrimaryButtonPressed,
-    required String secondaryButtonText,
-    required VoidCallback onSecondaryButtonPressed,
+    String? secondaryButtonText,
+    VoidCallback? onSecondaryButtonPressed,
     required Color color,
   }) {
     return Container(
@@ -187,27 +250,29 @@ class CustomDialogs {
           const SizedBox(height: 32),
           Row(
             children: [
-              Expanded(
-                child: TextButton(
-                  onPressed: onSecondaryButtonPressed,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side:  BorderSide(color: Colors.grey[300]!),
+              if (secondaryButtonText != null && onSecondaryButtonPressed != null) ...[
+                Expanded(
+                  child: TextButton(
+                    onPressed: onSecondaryButtonPressed,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side:  BorderSide(color: Colors.grey[300]!),
+                      ),
                     ),
-                  ),
-                  child: Text(
-                    secondaryButtonText,
-                    style: GoogleFonts.manrope(
-                      fontSize: 16,
-                      color: const Color(0xFF1E1E1E),
-                      fontWeight: FontWeight.w600,
+                    child: Text(
+                      secondaryButtonText,
+                      style: GoogleFonts.manrope(
+                        fontSize: 16,
+                        color: const Color(0xFF1E1E1E),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 16),
+                const SizedBox(width: 16),
+              ],
               Expanded(
                 child: ElevatedButton(
                   onPressed: onPrimaryButtonPressed,

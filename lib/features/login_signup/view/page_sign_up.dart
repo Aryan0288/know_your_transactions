@@ -9,6 +9,7 @@ import 'package:know_your_expenses/features/helper/utils.dart';
 import 'package:know_your_expenses/features/login_signup/view/page_sign_in.dart';
 import 'package:know_your_expenses/features/login_signup/view_model/view_model_login_signup.dart';
 import 'package:know_your_expenses/features/transaction/view/page_expense_transaction.dart';
+import 'package:know_your_expenses/core/widgets/custom_dialogs.dart';
 
 // ─── Colours ────────────────────────────────────────────────────────────────
 const _kGreen = Color(0xFF2E8B57);
@@ -155,15 +156,18 @@ class _SignUpPageState extends ConsumerState<SignUpPage>
           password: _passwordController.text.trim(),
         );
 
-    if (!mounted) return;
+
 
     if (success) {
-      Navigator.pushAndRemoveUntil(
+      CustomDialogs.showSignupSuccessDialog(
         context,
-        MaterialPageRoute(
-          builder: (_) => const SignInPage(showVerificationBanner: true),
-        ),
-        (route) => false,
+        onOkPressed: () {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const SignInPage(showVerificationBanner: false)),
+            (route) => false,
+          );
+        },
       );
     } else {
       Utils.showErrorToast(

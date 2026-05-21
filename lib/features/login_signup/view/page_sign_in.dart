@@ -11,6 +11,7 @@ import 'package:know_your_expenses/features/login_signup/view/page_forget_passwo
 import 'package:know_your_expenses/features/login_signup/view/page_sign_up.dart';
 import 'package:know_your_expenses/features/login_signup/view_model/view_model_login_signup.dart';
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
+import 'package:know_your_expenses/core/widgets/custom_dialogs.dart';
 
 // ─── Colours (same palette as Sign Up) ────────────────────────────────────
 const _kGreen = Color(0xFF2E8B57);
@@ -48,32 +49,6 @@ class _SignInPageState extends ConsumerState<SignInPage>
   @override
   void initState() {
     super.initState();
-
-    if (widget.showVerificationBanner) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.mark_email_unread_outlined, color: Colors.white, size: 20),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Account created! Please verify your email before signing in.',
-                    style: TextStyle(fontSize: 13),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: const Color(0xFF2E8B57),
-            duration: const Duration(seconds: 5),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
-      });
-    }
 
     _entranceController = AnimationController(
       duration: const Duration(milliseconds: 1000),
@@ -176,10 +151,20 @@ class _SignInPageState extends ConsumerState<SignInPage>
         (route) => false,
       );
     } else {
-      Utils.showErrorToast(
+      final errorMsg = ref.read(authControllerProvider).error ?? 'Please check your credentials and try again.';
+      
+      String displayMsg = errorMsg;
+      String title = "Login Failed";
+      
+      if (errorMsg.contains('Email not verified')) {
+        title = "Email Not Verified";
+        displayMsg = "We have sent another verification link to your email.\n\nPlease check your inbox (and spam folder) to verify your account.";
+      }
+      
+      CustomDialogs.showErrorDialog(
         context,
-        title: ref.read(authControllerProvider).error,
-        description: 'Please check your credentials and try again.',
+        title: title,
+        message: displayMsg,
       );
     }
   }

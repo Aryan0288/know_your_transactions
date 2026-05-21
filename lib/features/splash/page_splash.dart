@@ -33,13 +33,13 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
 
     // Logo animation controller
     _logoController = AnimationController(
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 800),
       vsync: this,
     );
 
     // Text animation controller
     _textController = AnimationController(
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 400),
       vsync: this,
     );
 
@@ -123,11 +123,11 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
   }
 
   Future<void> _startAnimations() async {
-    await Future.delayed(const Duration(milliseconds: 300));
+    await Future.delayed(const Duration(milliseconds: 100));
     _logoController.forward();
-    await Future.delayed(const Duration(milliseconds: 800));
+    await Future.delayed(const Duration(milliseconds: 300));
     _textController.forward();
-    await Future.delayed(const Duration(milliseconds: 1600));
+    await Future.delayed(const Duration(milliseconds: 600));
     if (mounted) {
       final user = FirebaseAuth.instance.currentUser;
       await user?.reload();
@@ -139,7 +139,7 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
         context,
         PageRouteBuilder(
           pageBuilder: (_, __, ___) => destination,
-          transitionDuration: const Duration(milliseconds: 700),
+          transitionDuration: const Duration(milliseconds: 400),
           transitionsBuilder: (_, animation, __, child) {
             return FadeTransition(
               opacity: CurvedAnimation(

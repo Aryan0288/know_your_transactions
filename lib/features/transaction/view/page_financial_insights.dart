@@ -233,12 +233,12 @@ class _FinancialInsightsPageState extends ConsumerState<FinancialInsightsPage>
         .fold(0.0, (s, t) => s + t.amount);
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
       children: [
         // ── Health Score ──────────────────────────────────────────────
-        _HealthScoreCard(insights: insights),
+        // _HealthScoreCard(insights: insights),
 
-        const SizedBox(height: 20),
+        // const SizedBox(height: 20),
 
         // ── Section title: Monthly History ────────────────────────────
         _SectionTitle(
@@ -283,12 +283,12 @@ class _FinancialInsightsPageState extends ConsumerState<FinancialInsightsPage>
         const SizedBox(height: 24),
 
         // ── AI Forecast ───────────────────────────────────────────────
-        _SectionTitle(
-          icon: Icons.auto_awesome_rounded,
-          title: 'A.I. Predictive Forecast',
-        ),
-        const SizedBox(height: 12),
-        _ForecastCard(amount: insights.forecastAmount),
+        // _SectionTitle(
+        //   icon: Icons.auto_awesome_rounded,
+        //   title: 'A.I. Predictive Forecast',
+        // ),
+        // const SizedBox(height: 12),
+        // _ForecastCard(amount: insights.forecastAmount),
 
         const SizedBox(height: 24),
 
@@ -456,140 +456,140 @@ class _GradientHeader extends StatelessWidget {
 }
 
 // ─── Health Score Card ────────────────────────────────────────────────────────
-class _HealthScoreCard extends StatelessWidget {
-  final FinancialInsight insights;
-
-  const _HealthScoreCard({required this.insights});
-
-  String get _emoji {
-    if (insights.healthScore >= 85) return '🏆';
-    if (insights.healthScore >= 60) return '📈';
-    return '⚠️';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [_kDeepGreen, _kGreen, _kLightGreen],
-        ),
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: _kGreen.withOpacity(0.35),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(_emoji, style: const TextStyle(fontSize: 18)),
-              const SizedBox(width: 8),
-              Text(
-                'Overall Health Score',
-                style: GoogleFonts.manrope(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white70,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          // Gauge
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              SizedBox(
-                width: 160,
-                height: 160,
-                child: TweenAnimationBuilder<double>(
-                  tween: Tween<double>(
-                    begin: 0,
-                    end: insights.healthScore / 100,
-                  ),
-                  duration: const Duration(milliseconds: 1500),
-                  curve: Curves.easeOutQuart,
-                  builder: (_, value, __) => CustomPaint(
-                    painter: HealthGaugePainter(
-                      value: value,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TweenAnimationBuilder<int>(
-                    tween: IntTween(begin: 0, end: insights.healthScore),
-                    duration: const Duration(milliseconds: 1500),
-                    builder: (_, value, __) => Text(
-                      '$value',
-                      style: GoogleFonts.manrope(
-                        fontSize: 52,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                        height: 1.0,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      insights.healthLabel,
-                      style: GoogleFonts.manrope(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text(
-              insights.healthMessage,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.manrope(
-                fontSize: 13,
-                color: Colors.white,
-                height: 1.55,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// class _HealthScoreCard extends StatelessWidget {
+//   final FinancialInsight insights;
+//
+//   const _HealthScoreCard({required this.insights});
+//
+//   String get _emoji {
+//     if (insights.healthScore >= 85) return '🏆';
+//     if (insights.healthScore >= 60) return '📈';
+//     return '⚠️';
+//   }
+//
+//   @override
+//   Widget build(BuildContext context) {
+//     return Container(
+//       padding: const EdgeInsets.all(24),
+//       decoration: BoxDecoration(
+//         gradient: const LinearGradient(
+//           begin: Alignment.topLeft,
+//           end: Alignment.bottomRight,
+//           colors: [_kDeepGreen, _kGreen, _kLightGreen],
+//         ),
+//         borderRadius: BorderRadius.circular(28),
+//         boxShadow: [
+//           BoxShadow(
+//             color: _kGreen.withOpacity(0.35),
+//             blurRadius: 24,
+//             offset: const Offset(0, 10),
+//           ),
+//         ],
+//       ),
+//       child: Column(
+//         children: [
+//           Row(
+//             mainAxisAlignment: MainAxisAlignment.center,
+//             children: [
+//               Text(_emoji, style: const TextStyle(fontSize: 18)),
+//               const SizedBox(width: 8),
+//               Text(
+//                 'Overall Health Score',
+//                 style: GoogleFonts.manrope(
+//                   fontSize: 15,
+//                   fontWeight: FontWeight.w700,
+//                   color: Colors.white70,
+//                 ),
+//               ),
+//             ],
+//           ),
+//           const SizedBox(height: 20),
+//
+//           // Gauge
+//           Stack(
+//             alignment: Alignment.center,
+//             children: [
+//               SizedBox(
+//                 width: 160,
+//                 height: 160,
+//                 child: TweenAnimationBuilder<double>(
+//                   tween: Tween<double>(
+//                     begin: 0,
+//                     end: insights.healthScore / 100,
+//                   ),
+//                   duration: const Duration(milliseconds: 1500),
+//                   curve: Curves.easeOutQuart,
+//                   builder: (_, value, __) => CustomPaint(
+//                     painter: HealthGaugePainter(
+//                       value: value,
+//                       color: Colors.white,
+//                     ),
+//                   ),
+//                 ),
+//               ),
+//               Column(
+//                 mainAxisSize: MainAxisSize.min,
+//                 children: [
+//                   TweenAnimationBuilder<int>(
+//                     tween: IntTween(begin: 0, end: insights.healthScore),
+//                     duration: const Duration(milliseconds: 1500),
+//                     builder: (_, value, __) => Text(
+//                       '$value',
+//                       style: GoogleFonts.manrope(
+//                         fontSize: 52,
+//                         fontWeight: FontWeight.w900,
+//                         color: Colors.white,
+//                         height: 1.0,
+//                       ),
+//                     ),
+//                   ),
+//                   const SizedBox(height: 4),
+//                   Container(
+//                     padding: const EdgeInsets.symmetric(
+//                       horizontal: 10,
+//                       vertical: 3,
+//                     ),
+//                     decoration: BoxDecoration(
+//                       color: Colors.white.withOpacity(0.2),
+//                       borderRadius: BorderRadius.circular(20),
+//                     ),
+//                     child: Text(
+//                       insights.healthLabel,
+//                       style: GoogleFonts.manrope(
+//                         fontSize: 12,
+//                         fontWeight: FontWeight.w700,
+//                         color: Colors.white,
+//                       ),
+//                     ),
+//                   ),
+//                 ],
+//               ),
+//             ],
+//           ),
+//
+//           const SizedBox(height: 18),
+//           Container(
+//             padding: const EdgeInsets.all(14),
+//             decoration: BoxDecoration(
+//               color: Colors.white.withOpacity(0.12),
+//               borderRadius: BorderRadius.circular(16),
+//             ),
+//             child: Text(
+//               insights.healthMessage,
+//               textAlign: TextAlign.center,
+//               style: GoogleFonts.manrope(
+//                 fontSize: 13,
+//                 color: Colors.white,
+//                 height: 1.55,
+//                 fontWeight: FontWeight.w500,
+//               ),
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+// }
 
 // ─── Section Title ────────────────────────────────────────────────────────────
 class _SectionTitle extends StatelessWidget {
