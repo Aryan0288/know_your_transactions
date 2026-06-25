@@ -1,19 +1,23 @@
 import 'dart:math';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:know_your_expenses/features/force_update/view/force_update_page.dart';
+import 'package:know_your_expenses/features/force_update/view_model/force_update_provider.dart';
 import 'package:know_your_expenses/features/home/view/page_home.dart';
 import 'package:know_your_expenses/features/login_signup/auth_helper.dart';
 import 'package:know_your_expenses/features/transaction/view/page_expense_transaction.dart';
 
-class SplashPage extends StatefulWidget {
+class SplashPage extends ConsumerStatefulWidget {
   const SplashPage({super.key});
 
   @override
-  State<SplashPage> createState() => _SplashPageState();
+  ConsumerState<SplashPage> createState() => _SplashPageState();
 }
 
-class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
+class _SplashPageState extends ConsumerState<SplashPage>
+    with TickerProviderStateMixin {
   late AnimationController _logoController;
   late AnimationController _textController;
   late AnimationController _particleController;
@@ -28,9 +32,18 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
   late Animation<double> _ringScale;
   late Animation<double> _ringOpacity;
 
+  // Fired immediately at initState — runs in parallel with animations
+  late final Future<ForceUpdateState> _forceUpdateFuture;
+
   @override
   void initState() {
     super.initState();
+
+    // ── Fire Firestore check FIRST, before any animation setup ──────────────
+    // This future runs in the background while animations play (~1s).
+    // By the time animations finish, the result is likely already ready.
+    _forceUpdateFuture = ref.read(forceUpdateProvider.future);
+    // ────────────────────────────────────────────────────────────────────────
 
     // Logo animation controller
     _logoController = AnimationController(
@@ -129,31 +142,61 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
     await Future.delayed(const Duration(milliseconds: 300));
     _textController.forward();
     await Future.delayed(const Duration(milliseconds: 600));
-    if (mounted) {
-      final user = FirebaseAuth.instance.currentUser;
-      await user?.reload();
-      final refreshedUser = FirebaseAuth.instance.currentUser;
-      final destination = (refreshedUser != null && isAppAccessGranted(refreshedUser))
-          ? AddExpensePageHomePage()
-          : const HomePage();
 
+    if (!mounted) return;
+
+    // ── Await the already-running Firestore check (started at initState) ────
+    // No extra network wait — this is almost always already resolved by now.
+    final forceUpdateState = await _forceUpdateFuture;
+
+    if (!mounted) return;
+
+    if (forceUpdateState.isUpdateRequired && forceUpdateState.config != null) {
       Navigator.pushReplacement(
         context,
         PageRouteBuilder(
-          pageBuilder: (_, __, ___) => destination,
+          pageBuilder: (_, _, _) =>
+              ForceUpdatePage(config: forceUpdateState.config!),
           transitionDuration: const Duration(milliseconds: 400),
-          transitionsBuilder: (_, animation, __, child) {
-            return FadeTransition(
-              opacity: CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeInOut,
-              ),
-              child: child,
-            );
-          },
+          transitionsBuilder: (_, animation, _, child) => FadeTransition(
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeInOut,
+            ),
+            child: child,
+          ),
         ),
       );
+      return; // stop here — do not proceed to auth navigation
     }
+    // ────────────────────────────────────────────────────────────────────────
+
+    // Existing auth navigation (unchanged)
+    final user = FirebaseAuth.instance.currentUser;
+    await user?.reload();
+    final refreshedUser = FirebaseAuth.instance.currentUser;
+    final destination = (refreshedUser != null && isAppAccessGranted(refreshedUser))
+        ? AddExpensePageHomePage()
+        : const HomePage();
+
+    if (!mounted) return;
+
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (_, _, _) => destination,
+        transitionDuration: const Duration(milliseconds: 400),
+        transitionsBuilder: (_, animation, _, child) {
+          return FadeTransition(
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeInOut,
+            ),
+            child: child,
+          );
+        },
+      ),
+    );
   }
 
   @override
