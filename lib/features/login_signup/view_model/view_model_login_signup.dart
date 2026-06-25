@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:know_your_expenses/features/login_signup/auth_helper.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_home.dart';
 import 'package:know_your_expenses/features/login_signup/model/model_auth.dart';
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
@@ -115,11 +117,8 @@ class AuthController extends StateNotifier<AuthState> {
     try {
       state = state.copyWith(isLoading: true, error: null);
 
-      print("call signIn func with google");
-      final googleSignIn = GoogleSignIn();
-      print("googleSignIn ---- $googleSignIn");
+      final googleSignIn = createGoogleSignIn();
       final googleUser = await googleSignIn.signIn();
-      print("googleUser ---- $googleUser");
 
       if (googleUser == null) {
         state = state.copyWith(isLoading: false, error: null);
@@ -158,17 +157,9 @@ class AuthController extends StateNotifier<AuthState> {
 
       state = state.copyWith(isLoading: false, error: null);
       return true;
-    } catch (e,stackTrace) {
-      print("");
-      print("");
-      print("");
-      print("");
-      print("Google sign-in error: $e");        // Add this
-      print("Stack trace: $stackTrace");
-      print("");
-      print("");
-      print("");
-      print("");
+    } catch (e, stackTrace) {
+      debugPrint('Google sign-in error: $e');
+      debugPrint('Stack trace: $stackTrace');
       state = state.copyWith(
         isLoading: false,
         error: 'Google sign-in failed. Please try again.',
@@ -212,7 +203,7 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> signOut() async {
     await _auth.signOut();
-    await GoogleSignIn().signOut();
+    await createGoogleSignIn().signOut();
     ref.read(bottomNavIndexProvider.notifier).state = 0;
   }
 }

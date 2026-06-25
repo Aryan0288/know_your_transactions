@@ -6,10 +6,10 @@ import 'package:know_your_expenses/features/common_widgets/common_navigation.dar
 import 'package:know_your_expenses/features/common_widgets/common_widgets_png.dart';
 import 'package:know_your_expenses/features/constants/string_constants.dart';
 import 'package:know_your_expenses/features/helper/utils.dart';
-import 'package:know_your_expenses/features/home/view/page_home.dart';
 import 'package:know_your_expenses/features/login_signup/view/page_forget_password.dart';
 import 'package:know_your_expenses/features/login_signup/view/page_sign_up.dart';
 import 'package:know_your_expenses/features/login_signup/view_model/view_model_login_signup.dart';
+import 'package:know_your_expenses/features/transaction/view/page_expense_transaction.dart';
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
 import 'package:know_your_expenses/core/widgets/custom_dialogs.dart';
 
@@ -122,7 +122,7 @@ class _SignInPageState extends ConsumerState<SignInPage>
     if (success) {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const HomePage()),
+        MaterialPageRoute(builder: (_) => AddExpensePageHomePage()),
         (route) => false,
       );
     } else {
@@ -147,7 +147,7 @@ class _SignInPageState extends ConsumerState<SignInPage>
     if (success) {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const HomePage()),
+        MaterialPageRoute(builder: (_) => AddExpensePageHomePage()),
         (route) => false,
       );
     } else {

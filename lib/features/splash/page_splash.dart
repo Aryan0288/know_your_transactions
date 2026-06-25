@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:know_your_expenses/features/home/view/page_home.dart';
+import 'package:know_your_expenses/features/login_signup/auth_helper.dart';
 import 'package:know_your_expenses/features/transaction/view/page_expense_transaction.dart';
 
 class SplashPage extends StatefulWidget {
@@ -131,7 +132,8 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
     if (mounted) {
       final user = FirebaseAuth.instance.currentUser;
       await user?.reload();
-      final destination = (user != null && (user.emailVerified || user.providerData.any((p) => p.providerId == 'google.com')))
+      final refreshedUser = FirebaseAuth.instance.currentUser;
+      final destination = (refreshedUser != null && isAppAccessGranted(refreshedUser))
           ? AddExpensePageHomePage()
           : const HomePage();
 

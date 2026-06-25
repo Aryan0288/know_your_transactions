@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:know_your_expenses/features/login_signup/auth_helper.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_home.dart';
 import 'package:know_your_expenses/features/login_signup/view/page_sign_in.dart';
 import 'package:know_your_expenses/features/transaction/view/page_add_expenses.dart';
@@ -88,23 +89,18 @@ class AddExpensePageHomePage extends ConsumerWidget {
           );
         },
       );
-    } else if (!user.emailVerified) {
+    } else if (!isAppAccessGranted(user)) {
       await user.reload();
       final refreshedUser = FirebaseAuth.instance.currentUser;
-      if (refreshedUser!.emailVerified) {
-        CustomDialogs.showSignInRequiredDialog(
-          context,
-          onSignInTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => SignInPage()),
-            );
-          },
-        );
-      } else {
+      if (refreshedUser != null && isAppAccessGranted(refreshedUser)) {
         Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => AddExpensePage()),
+        );
+      } else {
+        CustomDialogs.showEmailVerificationDialog(
+          context,
+          user: refreshedUser ?? user,
         );
       }
     } else {
