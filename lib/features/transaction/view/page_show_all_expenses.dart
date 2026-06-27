@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:sensors_plus/sensors_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -10,6 +9,10 @@ import 'package:know_your_expenses/features/common_widgets/common_widgets_scaffo
 import 'package:know_your_expenses/features/home/view_model/view_model_home.dart';
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
 import 'package:know_your_expenses/features/transaction/model/model_transaction.dart';
+import 'package:know_your_expenses/features/transaction/view/page_split_ledger.dart';
+import 'package:know_your_expenses/features/transaction/view/dialog_transaction_detail.dart';
+import 'package:know_your_expenses/features/home/view_model/view_model_group.dart';
+import 'package:know_your_expenses/features/transaction/view/widgets/widget_home_filter_bottom_sheet.dart';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 const _kGreen = Color(0xFF429690);
@@ -116,6 +119,8 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
             greeting: _getGreeting(),
           ),
 
+          const SizedBox(height: 12),
+
           // ─── Transaction List ─────────────────────────────────────────────
           Expanded(
             child: FadeTransition(
@@ -123,10 +128,14 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
               child: CustomScrollView(
                 physics: const BouncingScrollPhysics(),
                 slivers: [
+                  // Shake Onboarding Hint
+                  const SliverToBoxAdapter(
+                    child: _ShakeOnboardingCard(),
+                  ),
                   // Section header
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
+                      padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -152,33 +161,83 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                               ),
                             ],
                           ),
-                          Consumer(
-                            builder: (context, ref, _) {
-                              final count =
-                                  ref
-                                      .watch(transactionsStreamProvider)
-                                      .value
-                                      ?.length ??
-                                  0;
-                              return Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: _kGreen.withOpacity(0.12),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  '$count total',
-                                  style: GoogleFonts.manrope(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: _kGreen,
-                                  ),
-                                ),
-                              );
-                            },
+                          Row(
+                            children: [
+                              Consumer(
+                                builder: (context, ref, _) {
+                                  final count =
+                                      ref
+                                          .watch(homeFilteredTransactionsStreamProvider)
+                                          .value
+                                          ?.length ??
+                                      0;
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _kGreen.withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      '$count total',
+                                      style: GoogleFonts.manrope(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: _kGreen,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(width: 14),
+                              Consumer(
+                                builder: (context, ref, _) {
+                                  final selectedFilter = ref.watch(selectedHomeGroupIdFilterProvider);
+                                  return GestureDetector(
+                                    onTap: () => _showHomeFilterBottomSheet(context),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Stack(
+                                          clipBehavior: Clip.none,
+                                          children: [
+                                            const Icon(
+                                              Icons.filter_list_rounded,
+                                              color: _kGreen,
+                                              size: 24,
+                                            ),
+                                            if (selectedFilter != 'all')
+                                              Positioned(
+                                                right: -2,
+                                                top: -2,
+                                                child: Container(
+                                                  width: 8,
+                                                  height: 8,
+                                                  decoration: const BoxDecoration(
+                                                    color: Colors.amber,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Apply',
+                                          style: GoogleFonts.manrope(
+                                            fontSize: 10,
+                                            color: _kGreen,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -189,7 +248,7 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                   Consumer(
                     builder: (context, ref, child) {
                       final transactionsAsync = ref.watch(
-                        transactionsStreamProvider,
+                        homeFilteredTransactionsStreamProvider,
                       );
                       return transactionsAsync.when(
                         data: (transactions) {
@@ -217,16 +276,62 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                               ),
                             );
                           }
+
+                          // Group transactions by date
+                          final List<_HistoryItem> items = [];
+                          String? lastDateStr;
+
+                          for (int i = 0; i < transactions.length; i++) {
+                            final tx = transactions[i];
+                            final dateStr = _formatHeaderDate(tx.date);
+                            if (dateStr != lastDateStr) {
+                              items.add(_DateHeaderItem(dateStr));
+                              lastDateStr = dateStr;
+                            }
+                            items.add(_TransactionTileItem(tx, i));
+                          }
+
                           return SliverList(
                             delegate: SliverChildBuilderDelegate((
                               context,
                               index,
                             ) {
-                              return _AnimatedTransactionTile(
-                                transaction: transactions[index],
-                                index: index,
-                              );
-                            }, childCount: transactions.length),
+                              final item = items[index];
+                              if (item is _DateHeaderItem) {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+                                      child: Text(
+                                        item.dateText,
+                                        style: GoogleFonts.manrope(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w800,
+                                          color: const Color(0xFF667C7A),
+                                        ),
+                                      ),
+                                    ),
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 24),
+                                      child: Divider(
+                                        color: Color(0xFFE2E8F0),
+                                        height: 1,
+                                        thickness: 1,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                  ],
+                                );
+                              } else if (item is _TransactionTileItem) {
+                                return _AnimatedTransactionTile(
+                                  transaction: item.transaction,
+                                  index: item.index,
+                                  key: ValueKey(item.transaction.id),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            }, childCount: items.length),
                           );
                         },
                         loading: () => const SliverFillRemaining(
@@ -391,10 +496,32 @@ class _AnimatedHeader extends ConsumerWidget {
                             ),
                           ],
                         ),
-                        // Notification button
-                        _GlassIconButton(
-                          icon: Icons.notifications_none_rounded,
-                          onTap: () {},
+                        Row(
+                          children: [
+                            Consumer(
+                              builder: (context, ref, child) {
+                                final groupId = ref.watch(userGroupIdProvider);
+                                if (groupId == null) return const SizedBox();
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: _GlassIconButton(
+                                    icon: Icons.group_outlined,
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => const SplitLedgerPage()),
+                                      );
+                                    },
+                                  ),
+                                );
+                              },
+                            ),
+                            // Notification button
+                            _GlassIconButton(
+                              icon: Icons.notifications_none_rounded,
+                              onTap: () {},
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -410,7 +537,7 @@ class _AnimatedHeader extends ConsumerWidget {
                     opacity: cardOpacity,
                     child: Consumer(
                       builder: (context, ref, child) {
-                        final stats = ref.watch(transactionStatsProvider);
+                        final stats = ref.watch(homeFilteredTransactionStatsProvider);
                         return _BalanceCard(stats: stats);
                       },
                     ),
@@ -458,294 +585,117 @@ class _GlassIconButton extends StatelessWidget {
   }
 }
 
-// ─── Balance Card (gyroscope tilt + shake – unchanged logic) ─────────────────
-class _BalanceCard extends StatefulWidget {
+// ─── Balance Card (Static Available Balance Card) ───────────────────────────
+class _BalanceCard extends StatelessWidget {
   final TransactionStats stats;
 
   const _BalanceCard({required this.stats});
 
   @override
-  State<_BalanceCard> createState() => _BalanceCardState();
-}
-
-class _BalanceCardState extends State<_BalanceCard>
-    with SingleTickerProviderStateMixin {
-  StreamSubscription<AccelerometerEvent>? _subscription;
-
-  double _tiltX = 0.0;
-  double _tiltY = 0.0;
-
-  static const double _maxAngle = 0.2;
-  static const double _smoothing = 0.1;
-  static const double _maxAccel = 1.0;
-
-  late final AnimationController _shakeController;
-  static const double _shakeThreshold = 12.0;
-  double _lastMagnitude = 9.8;
-  DateTime _lastShakeTime = DateTime(2000);
-  static const Duration _shakeCooldown = Duration(milliseconds: 500);
-
-  @override
-  void initState() {
-    super.initState();
-
-    _shakeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-
-    _subscription =
-        accelerometerEventStream(
-          samplingPeriod: const Duration(milliseconds: 16),
-        ).listen((event) {
-          if (!mounted) return;
-
-          final magnitude = sqrt(
-            event.x * event.x + event.y * event.y + event.z * event.z,
-          );
-          final delta = (magnitude - _lastMagnitude).abs();
-          _lastMagnitude = magnitude;
-          final now = DateTime.now();
-          if ((delta > 5.0 || magnitude > _shakeThreshold) &&
-              now.difference(_lastShakeTime) > _shakeCooldown) {
-            _lastShakeTime = now;
-            _shakeController.forward(from: 0.0);
-          }
-
-          final targetX = (event.x / _maxAccel).clamp(-1.0, 1.0);
-          final targetY = (event.y / _maxAccel).clamp(-1.0, 1.0);
-          setState(() {
-            _tiltX = lerpDouble(_tiltX, targetX, _smoothing)!;
-            _tiltY = lerpDouble(_tiltY, targetY, _smoothing)!;
-          });
-        });
-  }
-
-  @override
-  void dispose() {
-    _subscription?.cancel();
-    _shakeController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final glowAlignX = _tiltX.clamp(-1.0, 1.0);
-    final glowAlignY = (-_tiltY + 1).clamp(-1.0, 1.0);
-    final glowIntensity = (_tiltX.abs() + _tiltY.abs()).clamp(0.0, 1.0);
+    final amountText = '₹ ${stats.totalBalance.toStringAsFixed(2)}';
 
-    return Transform(
-      alignment: Alignment.center,
-      transform: Matrix4.identity()
-        ..setEntry(3, 2, 0.001)
-        ..rotateY(_tiltX * _maxAngle)
-        ..rotateX(_tiltY * _maxAngle),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.18),
-              blurRadius: 24,
-              offset: Offset(_tiltX * 8, -_tiltY * 8 + 12),
-            ),
-          ],
-          gradient: RadialGradient(
-            center: Alignment(glowAlignX, glowAlignY),
-            radius: 1.2,
-            colors: [
-              Color.lerp(
-                const Color(0xFF2F7E79),
-                const Color(0xFF5EEAD4),
-                0.45 * glowIntensity,
-              )!,
-              const Color(0xFF2F7E79),
-            ],
-            stops: const [0.0, 0.75],
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.12),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Label row
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.account_balance_wallet_rounded,
-                        color: Colors.white70,
-                        size: 14,
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        'Total Expense',
-                        style: GoogleFonts.manrope(
-                          fontSize: 12,
-                          color: Colors.white70,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                const Icon(
-                  Icons.more_horiz_rounded,
-                  color: Colors.white54,
-                  size: 20,
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-
-            // Shake-animated amount
-            AnimatedBuilder(
-              animation: _shakeController,
-              builder: (context, _) {
-                final amountText =
-                    '₹ ${widget.stats.totalBalance.toStringAsFixed(2)}';
-                final progress = _shakeController.value;
-                final decay = 1.0 - progress;
-
-                return Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: List.generate(amountText.length, (index) {
-                    final phase = index * 0.4;
-                    final offsetX =
-                        sin((progress * pi * 20) + phase) * 1.0 * decay;
-                    final offsetY =
-                        cos((progress * pi * 20) + phase) * 2 * decay;
-                    return Transform.translate(
-                      offset: Offset(offsetX, offsetY),
-                      child: Text(
-                        amountText[index],
-                        style: GoogleFonts.manrope(
-                          fontSize: 34,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    );
-                  }),
-                );
-              },
-            ),
-
-            const SizedBox(height: 6),
-
-            // Shake hint
-            Text(
-              'Shake your phone to animate!',
-              style: GoogleFonts.manrope(
-                fontSize: 11,
-                color: Colors.white38,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // Divider
-            // Container(height: 1, color: Colors.white.withOpacity(0.12)),
-            //
-            const SizedBox(height: 20),
-
-
-            /// For later version
-
-            // Income & Expense row
-            /*Row(
-              children: [
-                Expanded(
-                  child: _IncomeExpenseCard(
-                    title: 'Income',
-                    amount: widget.stats.totalIncome,
-                    icon: Icons.arrow_downward_rounded,
-                    iconBg: Colors.greenAccent.shade400,
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 44,
-                  color: Colors.white.withOpacity(0.15),
-                ),
-                Expanded(
-                  child: _IncomeExpenseCard(
-                    title: 'Expenses',
-                    amount: widget.stats.totalExpense,
-                    icon: Icons.arrow_upward_rounded,
-                    iconBg: Colors.redAccent.shade200,
-                  ),
-                ),
-              ],
-            ),*/
+        ],
+        gradient: const RadialGradient(
+          center: Alignment(0.0, -0.5),
+          radius: 1.2,
+          colors: [
+            Color(0xFF3AAFA9),
+            Color(0xFF2F7E79),
           ],
+          stops: [0.0, 1.0],
         ),
       ),
-    );
-  }
-}
-
-// ─── Income / Expense Card ───────────────────────────────────────────────────
-class _IncomeExpenseCard extends StatelessWidget {
-  final String title;
-  final double amount;
-  final IconData icon;
-  final Color iconBg;
-
-  const _IncomeExpenseCard({
-    required this.title,
-    required this.amount,
-    required this.icon,
-    required this.iconBg,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: iconBg.withOpacity(0.22),
-            ),
-            child: Icon(icon, color: iconBg, size: 16),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          // Label row
+          Row(
             children: [
-              Text(
-                title,
-                style: GoogleFonts.manrope(
-                  fontSize: 12,
-                  color: Colors.white60,
-                  fontWeight: FontWeight.w500,
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.account_balance_wallet_rounded,
+                      color: Colors.white70,
+                      size: 14,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      'Available Balance',
+                      style: GoogleFonts.manrope(
+                        fontSize: 12,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Text(
-                '₹ ${amount.toStringAsFixed(2)}',
-                style: GoogleFonts.manrope(
-                  fontSize: 15,
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
+              const Spacer(),
+              const Icon(
+                Icons.more_horiz_rounded,
+                color: Colors.white54,
+                size: 20,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // Static amount
+          Text(
+            amountText,
+            style: GoogleFonts.manrope(
+              fontSize: 34,
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Income & Expense row
+          Row(
+            children: [
+              Expanded(
+                child: _IncomeExpenseCard(
+                  title: 'Income',
+                  amount: stats.totalIncome,
+                  icon: Icons.arrow_downward_rounded,
+                  iconBg: Colors.greenAccent.shade400,
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 44,
+                color: Colors.white.withOpacity(0.15),
+              ),
+              Expanded(
+                child: _IncomeExpenseCard(
+                  title: 'Expenses',
+                  amount: stats.totalExpense,
+                  icon: Icons.arrow_upward_rounded,
+                  iconBg: Colors.redAccent.shade200,
                 ),
               ),
             ],
@@ -762,6 +712,7 @@ class _AnimatedTransactionTile extends StatefulWidget {
   final int index;
 
   const _AnimatedTransactionTile({
+    super.key,
     required this.transaction,
     required this.index,
   });
@@ -837,7 +788,7 @@ class _TransactionTile extends StatelessWidget {
       barrierColor: Colors.black54,
       transitionDuration: const Duration(milliseconds: 350),
       pageBuilder: (_, __, ___) =>
-          _TransactionDetailDialog(transaction: transaction),
+          TransactionDetailDialog(transaction: transaction),
       transitionBuilder: (_, animation, __, child) {
         return ScaleTransition(
           scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
@@ -988,222 +939,60 @@ class _TransactionTile extends StatelessWidget {
   }
 }
 
-// ─── Transaction Detail Dialog (scale-in animation) ──────────────────────────
-class _TransactionDetailDialog extends StatelessWidget {
-  final TransactionModel transaction;
-
-  const _TransactionDetailDialog({required this.transaction});
-
-  @override
-  Widget build(BuildContext context) {
-    final isExpense = transaction.isExpense;
-    final typeColor = isExpense ? Colors.redAccent : Colors.green;
-
-    return Center(
-      child: Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(32),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.12),
-                blurRadius: 40,
-                offset: const Offset(0, 16),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // ── Coloured top strip ──
-              Container(
-                height: 8,
-                decoration: BoxDecoration(
-                  color: transaction.color,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(32),
-                    topRight: Radius.circular(32),
-                  ),
-                ),
-              ),
-
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
-                child: Column(
-                  children: [
-                    // Icon
-                    Container(
-                      width: 74,
-                      height: 74,
-                      decoration: BoxDecoration(
-                        color: transaction.color.withOpacity(0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        transaction.icon,
-                        color: transaction.color,
-                        size: 36,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Type badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: typeColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        isExpense ? '💸  Expense' : '💰  Income',
-                        style: GoogleFonts.manrope(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: typeColor,
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Amount
-                    ShaderMask(
-                      shaderCallback: (bounds) => LinearGradient(
-                        colors: isExpense
-                            ? [Colors.redAccent, Colors.red.shade800]
-                            : [Colors.green, Colors.teal],
-                      ).createShader(bounds),
-                      child: Text(
-                        '₹ ${transaction.amount.toStringAsFixed(2)}',
-                        style: GoogleFonts.manrope(
-                          fontSize: 36,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 28),
-
-                    // Detail rows
-                    _DetailRow(
-                      label: 'Category',
-                      value: transaction.categoryName,
-                      icon: Icons.category_rounded,
-                    ),
-                    const _Divider(),
-                    _DetailRow(
-                      label: 'Date',
-                      value: DateFormat(
-                        'MMM dd, yyyy  •  hh:mm a',
-                      ).format(transaction.date),
-                      icon: Icons.calendar_month_rounded,
-                    ),
-                    if (transaction.description.isNotEmpty) ...[
-                      const _Divider(),
-                      _DetailRow(
-                        label: 'Note',
-                        value: transaction.description,
-                        icon: Icons.notes_rounded,
-                      ),
-                    ],
-
-                    const SizedBox(height: 28),
-
-                    // Close button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2E7D79),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                        ),
-                        onPressed: () => Navigator.pop(context),
-                        child: Text(
-                          'Done',
-                          style: GoogleFonts.manrope(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DetailRow extends StatelessWidget {
-  final String label;
-  final String value;
+class _IncomeExpenseCard extends StatelessWidget {
+  final String title;
+  final double amount;
   final IconData icon;
+  final Color iconBg;
 
-  const _DetailRow({
-    required this.label,
-    required this.value,
+  const _IncomeExpenseCard({
+    required this.title,
+    required this.amount,
     required this.icon,
+    required this.iconBg,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 16, color: Colors.grey.shade400),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: GoogleFonts.manrope(
-              color: Colors.grey.shade500,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: iconBg.withOpacity(0.2),
+            shape: BoxShape.circle,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.end,
-              style: GoogleFonts.manrope(
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-                color: const Color(0xFF1E2D2C),
+          child: Icon(icon, color: Colors.white, size: 16),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.manrope(
+                  fontSize: 12,
+                  color: Colors.white70,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
+              const SizedBox(height: 2),
+              Text(
+                '₹${amount.toStringAsFixed(2)}',
+                style: GoogleFonts.manrope(
+                  fontSize: 15,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Divider extends StatelessWidget {
-  const _Divider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Divider(height: 1, color: Colors.grey.shade100),
+        ),
+      ],
     );
   }
 }
@@ -1370,4 +1159,120 @@ class _LoadingShimmerState extends State<_LoadingShimmer>
       },
     );
   }
+}
+
+// ─── Shake Onboarding Card ───────────────────────────────────────────────────
+class _ShakeOnboardingCard extends ConsumerWidget {
+  const _ShakeOnboardingCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final show = ref.watch(showShakeOnboardingProvider);
+    if (!show) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFE6F7F6), Color(0xFFD1F2F0)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: const Color(0xFFB2E5E2),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF429690).withOpacity(0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: const BoxDecoration(
+                color: Color(0xFF429690),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.vibration_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Quick Add by Shaking!',
+                    style: GoogleFonts.manrope(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF1A5C5A),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Did you know? Shake your phone at any screen to quickly add a new expense.',
+                    style: GoogleFonts.manrope(
+                      fontSize: 12,
+                      color: const Color(0xFF2E7D79),
+                      fontWeight: FontWeight.w500,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.close_rounded, size: 18),
+              color: const Color(0xFF2E7D79),
+              onPressed: () {
+                ref.read(showShakeOnboardingProvider.notifier).state = false;
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+abstract class _HistoryItem {}
+
+class _DateHeaderItem extends _HistoryItem {
+  final String dateText;
+  _DateHeaderItem(this.dateText);
+}
+
+class _TransactionTileItem extends _HistoryItem {
+  final TransactionModel transaction;
+  final int index;
+  _TransactionTileItem(this.transaction, this.index);
+}
+
+String _formatHeaderDate(DateTime date) {
+  return DateFormat('dd MMMM yyyy').format(date);
+}
+
+void _showHomeFilterBottomSheet(BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.white,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    builder: (context) => const HomeFilterBottomSheet(),
+  );
 }

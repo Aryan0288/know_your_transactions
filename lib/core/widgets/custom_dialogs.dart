@@ -129,6 +129,41 @@ class CustomDialogs {
     );
   }
 
+  static void showLeaveGroupDialog(
+    BuildContext context, {
+    required VoidCallback onConfirm,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28.0),
+          ),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          child: _awesomeDialogContent(
+            context,
+            title: "Leave Group?",
+            description: "Are you sure you want to leave this group? Your shared ledger access will be removed.",
+            icon: Icons.exit_to_app_rounded,
+            primaryButtonText: "Leave Group",
+            onPrimaryButtonPressed: () {
+              Navigator.pop(context);
+              onConfirm();
+            },
+            secondaryButtonText: "Cancel",
+            onSecondaryButtonPressed: () {
+              Navigator.pop(context);
+            },
+            color: const Color(0xFFE57373),
+          ),
+        );
+      },
+    );
+  }
+
   static void showSignupSuccessDialog(
     BuildContext context, {
     required VoidCallback onOkPressed,

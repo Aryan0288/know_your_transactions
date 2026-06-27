@@ -36,7 +36,7 @@ class _SignUpPageState extends ConsumerState<SignUpPage>
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  bool _obscurePassword = true;
+  final ValueNotifier<bool> _obscurePasswordNotifier = ValueNotifier<bool>(true);
 
   late AnimationController _entranceController;
   late Animation<Offset> _headerSlide;
@@ -93,6 +93,7 @@ class _SignUpPageState extends ConsumerState<SignUpPage>
     _emailController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
+    _obscurePasswordNotifier.dispose();
     super.dispose();
   }
 
@@ -302,25 +303,29 @@ class _SignUpPageState extends ConsumerState<SignUpPage>
                         ),
                         const SizedBox(height: 14),
 
-                        _SmartField(
-                          controller: _passwordController,
-                          label: 'Password',
-                          hint: 'Min. 6 characters',
-                          icon: Icons.lock_outline_rounded,
-                          obscureText: _obscurePassword,
-                          validator: _validatePassword,
-                          suffixWidget: GestureDetector(
-                            onTap: () => setState(
-                              () => _obscurePassword = !_obscurePassword,
-                            ),
-                            child: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_outlined,
-                              color: Colors.grey.shade400,
-                              size: 20,
-                            ),
-                          ),
+                        ValueListenableBuilder<bool>(
+                          valueListenable: _obscurePasswordNotifier,
+                          builder: (context, obscurePassword, child) {
+                            return _SmartField(
+                              controller: _passwordController,
+                              label: 'Password',
+                              hint: 'Min. 6 characters',
+                              icon: Icons.lock_outline_rounded,
+                              obscureText: obscurePassword,
+                              validator: _validatePassword,
+                              suffixWidget: GestureDetector(
+                                onTap: () => _obscurePasswordNotifier.value =
+                                    !obscurePassword,
+                                child: Icon(
+                                  obscurePassword
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                  color: Colors.grey.shade400,
+                                  size: 20,
+                                ),
+                              ),
+                            );
+                          },
                         ),
 
                         const SizedBox(height: 32),
@@ -578,10 +583,8 @@ class _SmartFieldState extends State<_SmartField>
   late AnimationController _shakeController;
   late Animation<double> _shakeAnim;
 
-  // field state
-  bool _isDirty = false; // has the user typed anything?
-  bool _hasError = false;
-  String? _errorText;
+  final ValueNotifier<bool> _isDirtyNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<String?> _errorNotifier = ValueNotifier<String?>(null);
 
   @override
   void initState() {
@@ -599,217 +602,217 @@ class _SmartFieldState extends State<_SmartField>
       TweenSequenceItem(tween: Tween(begin: -4, end: 4), weight: 2),
       TweenSequenceItem(tween: Tween(begin: 4, end: 0), weight: 1),
     ]).animate(CurvedAnimation(parent: _shakeController, curve: Curves.linear));
-
-    _focusNode.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     _focusNode.dispose();
     _shakeController.dispose();
+    _isDirtyNotifier.dispose();
+    _errorNotifier.dispose();
     super.dispose();
   }
 
   void _onChanged(String value) {
-    if (!_isDirty) setState(() => _isDirty = true);
-
+    if (!_isDirtyNotifier.value) _isDirtyNotifier.value = true;
     final err = widget.validator?.call(value);
-    setState(() {
-      _hasError = err != null;
-      _errorText = err;
-    });
+    _errorNotifier.value = err;
   }
 
-  // Called by the Form validator on submit
   String? _validate(String? value) {
     final err = widget.validator?.call(value);
-    setState(() {
-      _isDirty = true;
-      _hasError = err != null;
-      _errorText = err;
-    });
+    _isDirtyNotifier.value = true;
+    _errorNotifier.value = err;
     if (err != null) _shakeController.forward(from: 0);
     return err;
   }
 
-  Color get _borderColor {
-    if (_isDirty && _hasError) return _kRed;
-    if (_isDirty && !_hasError) return _kBlue;
-    if (_focusNode.hasFocus) return _kBlue.withOpacity(0.6);
+  Color _borderColor(bool isDirty, String? errorText, bool hasFocus) {
+    final hasError = errorText != null;
+    if (isDirty && hasError) return _kRed;
+    if (isDirty && !hasError) return _kBlue;
+    if (hasFocus) return _kBlue.withOpacity(0.6);
     return _kBorder;
   }
 
-  double get _borderWidth {
-    if (_isDirty && _hasError) return 1.8;
-    if (_isDirty && !_hasError) return 1.8;
-    if (_focusNode.hasFocus) return 1.5;
+  double _borderWidth(bool isDirty, bool hasFocus) {
+    if (isDirty) return 1.8;
+    if (hasFocus) return 1.5;
     return 1.0;
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool isValid = _isDirty && !_hasError;
-
     return AnimatedBuilder(
-      animation: _shakeAnim,
-      builder: (_, child) => Transform.translate(
-        offset: Offset(_shakeAnim.value, 0),
-        child: child,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Label
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 6),
-            child: Row(
-              children: [
-                Text(
-                  widget.label,
-                  style: GoogleFonts.manrope(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: _isDirty && _hasError
-                        ? _kRed
-                        : isValid
-                        ? _kGreen
-                        : const Color(0xFF3A4A48),
-                  ),
-                ),
-                if (isValid) ...[
-                  const SizedBox(width: 6),
-                  const Icon(
-                    Icons.check_circle_rounded,
-                    size: 14,
-                    color: _kGreen,
-                  ),
-                ],
-              ],
-            ),
-          ),
+      animation: Listenable.merge([_shakeAnim, _focusNode, _isDirtyNotifier, _errorNotifier]),
+      builder: (context, _) {
+        final isDirty = _isDirtyNotifier.value;
+        final errorText = _errorNotifier.value;
+        final hasError = errorText != null;
+        final hasFocus = _focusNode.hasFocus;
+        final bool isValid = isDirty && !hasError;
 
-          // Field container
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            decoration: BoxDecoration(
-              color: _isDirty && _hasError
-                  ? _kRed.withOpacity(0.04)
-                  : isValid
-                  ? _kBlue.withOpacity(0.03)
-                  : _kBg,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _borderColor, width: _borderWidth),
-              boxShadow: (_focusNode.hasFocus || isValid)
-                  ? [
-                      BoxShadow(
-                        color: (isValid && !_hasError ? _kBlue : _kBorder)
-                            .withOpacity(0.15),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Row(
-              children: [
-                const SizedBox(width: 14),
-                // Leading icon
-                Icon(
-                  widget.icon,
-                  size: 20,
-                  color: _isDirty && _hasError
-                      ? _kRed.withOpacity(0.7)
-                      : isValid
-                      ? _kGreen
-                      : Colors.grey.shade400,
-                ),
-                const SizedBox(width: 10),
-
-                // Text field
-                Expanded(
-                  child: TextFormField(
-                    controller: widget.controller,
-                    focusNode: _focusNode,
-                    obscureText: widget.obscureText,
-                    keyboardType: widget.keyboardType,
-                    maxLength: widget.maxLength,
-                    onChanged: _onChanged,
-                    validator: _validate,
-                    autovalidateMode: AutovalidateMode.disabled,
-                    inputFormatters: widget.inputFormatters,
-                    style: GoogleFonts.manrope(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF1E2D2C),
-                    ),
-                    decoration: InputDecoration(
-                      hintText: widget.hint,
-                      hintStyle: GoogleFonts.manrope(
-                        fontSize: 14,
-                        color: Colors.grey.shade500,
-                        fontWeight: FontWeight.w400,
-                      ),
-                      border: InputBorder.none,
-                      isDense: true,
-                      counter: const SizedBox.shrink(),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                      errorStyle: const TextStyle(fontSize: 0, height: 0),
-                      errorBorder: InputBorder.none,
-                      focusedErrorBorder: InputBorder.none,
-                    ),
-                  ),
-                ),
-
-                // Suffix widget (eye icon etc.)
-                if (widget.suffixWidget != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 14),
-                    child: widget.suffixWidget!,
-                  )
-                else if (isValid)
-                  const Padding(
-                    padding: EdgeInsets.only(right: 14),
-                    child: Icon(Icons.check_rounded, color: _kGreen, size: 18),
-                  )
-                else
-                  const SizedBox(width: 14),
-              ],
-            ),
-          ),
-
-          // Error message (animated)
-          AnimatedCrossFade(
-            firstChild: const SizedBox(height: 0),
-            secondChild: Padding(
-              padding: const EdgeInsets.only(top: 6, left: 4),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.info_outline_rounded,
-                    size: 13,
-                    color: _kRed,
-                  ),
-                  const SizedBox(width: 5),
-                  Expanded(
-                    child: Text(
-                      _errorText ?? '',
+        return Transform.translate(
+          offset: Offset(_shakeAnim.value, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Label
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 6),
+                child: Row(
+                  children: [
+                    Text(
+                      widget.label,
                       style: GoogleFonts.manrope(
-                        fontSize: 12,
-                        color: _kRed,
-                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDirty && hasError
+                            ? _kRed
+                            : isValid
+                            ? _kGreen
+                            : const Color(0xFF3A4A48),
                       ),
                     ),
-                  ),
-                ],
+                    if (isValid) ...[
+                      const SizedBox(width: 6),
+                      const Icon(
+                        Icons.check_circle_rounded,
+                        size: 14,
+                        color: _kGreen,
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-            crossFadeState: _hasError && _isDirty
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            duration: const Duration(milliseconds: 200),
+
+              // Field container
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: BoxDecoration(
+                  color: isDirty && hasError
+                      ? _kRed.withOpacity(0.04)
+                      : isValid
+                      ? _kBlue.withOpacity(0.03)
+                      : _kBg,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _borderColor(isDirty, errorText, hasFocus),
+                    width: _borderWidth(isDirty, hasFocus),
+                  ),
+                  boxShadow: (hasFocus || isValid)
+                      ? [
+                          BoxShadow(
+                            color: (isValid && !hasError ? _kBlue : _kBorder)
+                                .withOpacity(0.15),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 14),
+                    // Leading icon
+                    Icon(
+                      widget.icon,
+                      size: 20,
+                      color: isDirty && hasError
+                          ? _kRed.withOpacity(0.7)
+                          : isValid
+                          ? _kGreen
+                          : Colors.grey.shade400,
+                    ),
+                    const SizedBox(width: 10),
+
+                    // Text field
+                    Expanded(
+                      child: TextFormField(
+                        controller: widget.controller,
+                        focusNode: _focusNode,
+                        obscureText: widget.obscureText,
+                        keyboardType: widget.keyboardType,
+                        maxLength: widget.maxLength,
+                        onChanged: _onChanged,
+                        validator: _validate,
+                        autovalidateMode: AutovalidateMode.disabled,
+                        inputFormatters: widget.inputFormatters,
+                        style: GoogleFonts.manrope(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF1E2D2C),
+                        ),
+                        decoration: InputDecoration(
+                          hintText: widget.hint,
+                          hintStyle: GoogleFonts.manrope(
+                            fontSize: 14,
+                            color: Colors.grey.shade500,
+                            fontWeight: FontWeight.w400,
+                          ),
+                          border: InputBorder.none,
+                          isDense: true,
+                          counter: const SizedBox.shrink(),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                          errorStyle: const TextStyle(fontSize: 0, height: 0),
+                          errorBorder: InputBorder.none,
+                          focusedErrorBorder: InputBorder.none,
+                        ),
+                      ),
+                    ),
+
+                    // Suffix widget (eye icon etc.)
+                    if (widget.suffixWidget != null)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 14),
+                        child: widget.suffixWidget!,
+                      )
+                    else if (isValid)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 14),
+                        child: Icon(Icons.check_rounded, color: _kGreen, size: 18),
+                      )
+                    else
+                      const SizedBox(width: 14),
+                  ],
+                ),
+              ),
+
+              // Error message (animated)
+              AnimatedCrossFade(
+                firstChild: const SizedBox(height: 0),
+                secondChild: Padding(
+                  padding: const EdgeInsets.only(top: 6, left: 4),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.info_outline_rounded,
+                        size: 13,
+                        color: _kRed,
+                      ),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          errorText ?? '',
+                          style: GoogleFonts.manrope(
+                            fontSize: 12,
+                            color: _kRed,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                crossFadeState: hasError && isDirty
+                    ? CrossFadeState.showSecond
+                    : CrossFadeState.showFirst,
+                duration: const Duration(milliseconds: 200),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

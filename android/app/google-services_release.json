@@ -14,11 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "89507154805-78g4kce2h5pild22m7v0n4an0susjrrq.apps.googleusercontent.com",
+          "client_id": "89507154805-uen1nh9eumir9ptsonq7rnoblsi0gvp8.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.anuj.knowyourexpenses",
-            "certificate_hash": "9e8ac2a0a3c964713f2ed24c89a5b035911d3085"
+            "certificate_hash": "01b9dc0945560564db1f44a1ef43757865b79878"
           }
         },
         {

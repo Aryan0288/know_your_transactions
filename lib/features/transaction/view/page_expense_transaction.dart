@@ -12,9 +12,12 @@ import 'package:know_your_expenses/features/transaction/view/page_add_expenses.d
 import 'package:know_your_expenses/features/transaction/view/page_profile_section.dart';
 import 'package:know_your_expenses/features/transaction/view/page_show_all_expenses.dart';
 import 'package:know_your_expenses/core/widgets/custom_dialogs.dart';
-import 'package:know_your_expenses/features/transaction/view/page_financial_insights.dart';
+import 'package:know_your_expenses/features/transaction/view/page_split_ledger.dart';
 import 'package:know_your_expenses/features/transaction/view/page_statistics.dart';
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
+import 'package:know_your_expenses/features/helper/shake_detector.dart';
+import 'package:know_your_expenses/features/transaction/view/dialog_quick_add_amount.dart';
+import 'package:know_your_expenses/features/home/view_model/view_model_group.dart';
 
 // ─── Colours ─────────────────────────────────────────────────────────────────
 const _kGreen = Color(0xFF2E8B57);
@@ -51,9 +54,9 @@ const _navItems = [
   ),
   _NavItem(
     index: 3,
-    icon: Icons.account_balance_wallet_outlined,
-    activeIcon: Icons.account_balance_wallet_rounded,
-    label: 'Insights',
+    icon: Icons.group_outlined,
+    activeIcon: Icons.group_rounded,
+    label: 'Groups',
   ),
   _NavItem(
     index: 4,
@@ -64,18 +67,46 @@ const _navItems = [
 ];
 
 // ─── Main Shell ───────────────────────────────────────────────────────────────
-class AddExpensePageHomePage extends ConsumerWidget {
-  AddExpensePageHomePage({super.key});
+class AddExpensePageHomePage extends ConsumerStatefulWidget {
+  const AddExpensePageHomePage({super.key});
+
+  @override
+  ConsumerState<AddExpensePageHomePage> createState() => _AddExpensePageHomePageState();
+}
+
+class _AddExpensePageHomePageState extends ConsumerState<AddExpensePageHomePage> {
+  late ShakeDetector _shakeDetector;
 
   final pages = [
     const ShowAllExpensesPage(),
     StatisticsPage(),
     const SizedBox(),
-    const FinancialInsightsPage(),
+    const SplitLedgerPage(),
     const ProfileSectionPage(),
   ];
 
-  Future<void> _onFabPressed(BuildContext context, WidgetRef ref) async {
+  @override
+  void initState() {
+    super.initState();
+    _shakeDetector = ShakeDetector(
+      onShake: () {
+        HapticFeedback.vibrate();
+        Future.delayed(const Duration(milliseconds: 150), () {
+          HapticFeedback.vibrate();
+        });
+        QuickAddAmountDialog.show(context);
+      },
+    );
+    _shakeDetector.startListening();
+  }
+
+  @override
+  void dispose() {
+    _shakeDetector.stopListening();
+    super.dispose();
+  }
+
+  Future<void> _onFabPressed(BuildContext context) async {
     HapticFeedback.mediumImpact();
     final user = ref.read(firebaseAuthProvider).currentUser;
 
@@ -95,7 +126,7 @@ class AddExpensePageHomePage extends ConsumerWidget {
       if (refreshedUser != null && isAppAccessGranted(refreshedUser)) {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => AddExpensePage()),
+          MaterialPageRoute(builder: (_) => const AddExpensePage()),
         );
       } else {
         CustomDialogs.showEmailVerificationDialog(
@@ -106,14 +137,82 @@ class AddExpensePageHomePage extends ConsumerWidget {
     } else {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => AddExpensePage()),
+        MaterialPageRoute(builder: (_) => const AddExpensePage()),
       );
     }
   }
 
+  void _showInvitationPopup(BuildContext context, Map<String, dynamic> invite) {
+    final inviteId = invite['id'] as String;
+    final groupId = invite['fromGroupId'] as String;
+    final groupName = invite['fromGroupName'] as String? ?? 'Shared Group';
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          'Group Invitation',
+          style: GoogleFonts.manrope(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'You have been invited to join the group "$groupName" to track shared expenses.',
+          style: GoogleFonts.manrope(fontSize: 16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Later',
+              style: GoogleFonts.manrope(color: Colors.grey[600], fontWeight: FontWeight.bold),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await ref.read(groupControllerProvider.notifier).declineInvitation(inviteId);
+            },
+            child: const Text(
+              'Decline',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2E8B57),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () async {
+              Navigator.pop(context);
+              await ref.read(groupControllerProvider.notifier).acceptInvitation(inviteId, groupId);
+            },
+            child: Text(
+              'Accept',
+              style: GoogleFonts.manrope(fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final currentIndex = ref.watch(bottomNavIndexProvider);
+
+    // Check for pending invitations on startup
+    final invitesAsync = ref.watch(pendingInvitationsProvider);
+    final dialogShown = ref.watch(invitationDialogShownProvider);
+
+    invitesAsync.whenData((invites) {
+      if (invites.isNotEmpty && !dialogShown) {
+        Future.microtask(() {
+          ref.read(invitationDialogShownProvider.notifier).state = true;
+          _showInvitationPopup(context, invites.first);
+        });
+      }
+    });
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0FAF4),
@@ -147,7 +246,7 @@ class AddExpensePageHomePage extends ConsumerWidget {
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: _AnimatedFAB(
-        onPressed: (context) => _onFabPressed(context, ref),
+        onPressed: (context) => _onFabPressed(context),
       ),
       bottomNavigationBar: _AwesomeBottomBar(
         currentIndex: currentIndex,
@@ -175,7 +274,7 @@ class _AnimatedFABState extends State<_AnimatedFAB>
   late AnimationController _controller;
   late Animation<double> _rotateAnim;
   late Animation<double> _scaleAnim;
-  bool _isPressed = false;
+  final ValueNotifier<bool> _isPressedNotifier = ValueNotifier<bool>(false);
 
   @override
   void initState() {
@@ -198,6 +297,7 @@ class _AnimatedFABState extends State<_AnimatedFAB>
   @override
   void dispose() {
     _controller.dispose();
+    _isPressedNotifier.dispose();
     super.dispose();
   }
 
@@ -217,39 +317,44 @@ class _AnimatedFABState extends State<_AnimatedFAB>
           child: child,
         ),
       ),
-      child: GestureDetector(
-        onTapDown: (_) => setState(() => _isPressed = true),
-        onTapUp: (_) {
-          setState(() => _isPressed = false);
-          _handleTap();
-        },
-        onTapCancel: () => setState(() => _isPressed = false),
-        child: Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [_kLightGreen, _kGreen, _kDeepGreen],
+      child: ValueListenableBuilder<bool>(
+        valueListenable: _isPressedNotifier,
+        builder: (context, isPressed, _) {
+          return GestureDetector(
+            onTapDown: (_) => _isPressedNotifier.value = true,
+            onTapUp: (_) {
+              _isPressedNotifier.value = false;
+              _handleTap();
+            },
+            onTapCancel: () => _isPressedNotifier.value = false,
+            child: Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [_kLightGreen, _kGreen, _kDeepGreen],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: _kGreen.withOpacity(isPressed ? 0.2 : 0.45),
+                    blurRadius: isPressed ? 8 : 20,
+                    spreadRadius: isPressed ? 0 : 2,
+                    offset: const Offset(0, 6),
+                  ),
+                  BoxShadow(
+                    color: _kLightGreen.withOpacity(0.2),
+                    blurRadius: 30,
+                    spreadRadius: 4,
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: _kGreen.withOpacity(_isPressed ? 0.2 : 0.45),
-                blurRadius: _isPressed ? 8 : 20,
-                spreadRadius: _isPressed ? 0 : 2,
-                offset: const Offset(0, 6),
-              ),
-              BoxShadow(
-                color: _kLightGreen.withOpacity(0.2),
-                blurRadius: 30,
-                spreadRadius: 4,
-              ),
-            ],
-          ),
-          child: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
-        ),
+          );
+        },
       ),
     );
   }

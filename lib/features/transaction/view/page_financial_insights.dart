@@ -51,7 +51,7 @@ class _FinancialInsightsPageState extends ConsumerState<FinancialInsightsPage>
   late Animation<Offset> _bodySlide;
   late Animation<double> _bodyOpacity;
 
-  bool _calendarExpanded = true;
+  final ValueNotifier<bool> _calendarExpandedNotifier = ValueNotifier<bool>(true);
 
   @override
   void initState() {
@@ -105,12 +105,13 @@ class _FinancialInsightsPageState extends ConsumerState<FinancialInsightsPage>
   void dispose() {
     _entranceController.dispose();
     _calendarController.dispose();
+    _calendarExpandedNotifier.dispose();
     super.dispose();
   }
 
   void _toggleCalendar() {
-    setState(() => _calendarExpanded = !_calendarExpanded);
-    _calendarExpanded
+    _calendarExpandedNotifier.value = !_calendarExpandedNotifier.value;
+    _calendarExpandedNotifier.value
         ? _calendarController.forward()
         : _calendarController.reverse();
   }
@@ -248,20 +249,25 @@ class _FinancialInsightsPageState extends ConsumerState<FinancialInsightsPage>
         const SizedBox(height: 12),
 
         // ── Calendar picker card ──────────────────────────────────────
-        _CalendarCard(
-          expanded: _calendarExpanded,
-          calendarController: _calendarController,
-          selectedMonth: selectedMonth,
-          selectedYear: selectedYear,
-          now: now,
-          onToggle: _toggleCalendar,
-          onMonthSelected: (m) {
-            HapticFeedback.selectionClick();
-            ref.read(historySelectedMonthProvider.notifier).state = m;
-          },
-          onYearChanged: (y) {
-            HapticFeedback.selectionClick();
-            ref.read(historySelectedYearProvider.notifier).state = y;
+        ValueListenableBuilder<bool>(
+          valueListenable: _calendarExpandedNotifier,
+          builder: (context, calendarExpanded, _) {
+            return _CalendarCard(
+              expanded: calendarExpanded,
+              calendarController: _calendarController,
+              selectedMonth: selectedMonth,
+              selectedYear: selectedYear,
+              now: now,
+              onToggle: _toggleCalendar,
+              onMonthSelected: (m) {
+                HapticFeedback.selectionClick();
+                ref.read(historySelectedMonthProvider.notifier).state = m;
+              },
+              onYearChanged: (y) {
+                HapticFeedback.selectionClick();
+                ref.read(historySelectedYearProvider.notifier).state = y;
+              },
+            );
           },
         ),
 
@@ -1221,102 +1227,6 @@ class _TransactionTileState extends State<_TransactionTile>
   }
 }
 
-// ─── Forecast Card ────────────────────────────────────────────────────────────
-class _ForecastCard extends StatelessWidget {
-  final double amount;
-
-  const _ForecastCard({required this.amount});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            const Color(0xFF0461E5).withOpacity(0.08),
-            const Color(0xFF7B2FF7).withOpacity(0.06),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: const Color(0xFF0461E5).withOpacity(0.15),
-          width: 1.2,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF0461E5), Color(0xFF7B2FF7)],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF0461E5).withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.auto_graph_rounded,
-              color: Colors.white,
-              size: 26,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Next Month Est. Budget',
-                  style: GoogleFonts.manrope(
-                    fontSize: 12,
-                    color: Colors.grey.shade500,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0.0, end: amount),
-                  duration: const Duration(milliseconds: 1200),
-                  curve: Curves.easeOutQuart,
-                  builder: (_, v, __) => Text(
-                    '₹${v.toStringAsFixed(0)}',
-                    style: GoogleFonts.manrope(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF1E2D2C),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0461E5).withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.arrow_forward_ios_rounded,
-              size: 14,
-              color: Color(0xFF0461E5),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ─── Wisdom Card ──────────────────────────────────────────────────────────────
 class _WisdomCard extends StatefulWidget {

@@ -1,4 +1,4 @@
-// import 'dart:convert';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_riverpod/legacy.dart';
@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_home.dart';
 import 'package:know_your_expenses/features/transaction/model/model_transaction.dart';
+import 'package:know_your_expenses/features/home/view_model/view_model_group.dart';
 // import 'package:cloudinary/cloudinary.dart';
 // import 'package:cloudinary_url_gen/cloudinary.dart';
 
@@ -24,96 +25,139 @@ final transactionViewModelProvider =
 
 enum StatisticsPeriod { day, week, month, year }
 
+enum StatisticsType { expense, income }
+
 final selectedPeriodProvider = StateProvider<StatisticsPeriod>(
   (ref) => StatisticsPeriod.week,
 );
+final statisticsTypeProvider = StateProvider<StatisticsType>(
+  (ref) => StatisticsType.expense,
+);
 final touchedIndexProvider = StateProvider<int>((ref) => -1);
 
-final categoriesProvider = StreamProvider<List<CategoryModel>>((ref) {
+final showShakeOnboardingProvider = StateProvider<bool>((ref) => true);
+
+final userGroupIdProvider = Provider<String?>((ref) {
+  final userData = ref.watch(userDataProvider).value;
+  return userData?['groupId'] as String?;
+});
+
+final personalCategoriesStreamProvider = StreamProvider<List<CategoryModel>>((ref) {
   final user = ref.watch(authStateProvider).value;
   if (user == null) return Stream.value([]);
 
   final firestore = FirebaseFirestore.instance;
 
-  // Combine default categories and user-added categories
   return firestore
       .collection('users')
       .doc(user.uid)
       .collection('categories')
       .snapshots()
       .map((snapshot) {
-        final userCategories = snapshot.docs
+        return snapshot.docs
             .map((doc) => CategoryModel.fromMap(doc.data(), doc.id))
             .toList();
-
-        final defaultCategories = [
-          CategoryModel(
-            id: 'food',
-            name: 'Food',
-            iconCodePoint: Icons.restaurant.codePoint,
-            colorValue: Colors.orange.value,
-          ),
-          CategoryModel(
-            id: 'transport',
-            name: 'Transport',
-            iconCodePoint: Icons.directions_bus.codePoint,
-            colorValue: Colors.blue.value,
-          ),
-          CategoryModel(
-            id: 'shopping',
-            name: 'Shopping',
-            iconCodePoint: Icons.shopping_bag.codePoint,
-            colorValue: Colors.pink.value,
-          ),
-          CategoryModel(
-            id: 'utilities',
-            name: 'Utilities',
-            iconCodePoint: Icons.power.codePoint,
-            colorValue: Colors.amber.value,
-          ),
-          CategoryModel(
-            id: 'entertainment',
-            name: 'Entertainment',
-            iconCodePoint: Icons.movie.codePoint,
-            colorValue: Colors.purple.value,
-          ),
-          CategoryModel(
-            id: 'health',
-            name: 'Health',
-            iconCodePoint: Icons.medical_services.codePoint,
-            colorValue: Colors.red.value,
-          ),
-        ];
-
-        final otherCategory = CategoryModel(
-          id: 'other',
-          name: 'Other',
-          iconCodePoint: Icons.more_horiz.codePoint,
-          colorValue: Colors.grey.value,
-        );
-
-        // Merge lists, avoiding duplicates by name if any
-        final allCategories = [...defaultCategories];
-        for (var userCat in userCategories) {
-          if (!allCategories.any(
-                (element) =>
-                    element.name.toLowerCase() == userCat.name.toLowerCase(),
-              ) &&
-              userCat.name.toLowerCase() != 'other') {
-            allCategories.add(userCat);
-          }
-        }
-
-        // Always add "Other" at the end
-        allCategories.add(otherCategory);
-
-        return allCategories;
       });
 });
 
-final transactionsStreamProvider = StreamProvider<List<TransactionModel>>((
-  ref,
-) {
+final groupCategoriesStreamProvider = StreamProvider<List<CategoryModel>>((ref) {
+  final groupId = ref.watch(userGroupIdProvider);
+  if (groupId == null) return Stream.value([]);
+
+  final firestore = FirebaseFirestore.instance;
+
+  return firestore
+      .collection('groups')
+      .doc(groupId)
+      .collection('categories')
+      .snapshots()
+      .map((snapshot) {
+        return snapshot.docs
+            .map((doc) => CategoryModel.fromMap(doc.data(), doc.id))
+            .toList();
+      });
+});
+
+final categoriesProvider = StreamProvider<List<CategoryModel>>((ref) {
+  final personalCategories = ref.watch(personalCategoriesStreamProvider).value ?? [];
+  final groupCategories = ref.watch(groupCategoriesStreamProvider).value ?? [];
+
+  final defaultCategories = [
+    CategoryModel(
+      id: 'food',
+      name: 'Food',
+      iconCodePoint: Icons.restaurant.codePoint,
+      colorValue: Colors.orange.value,
+    ),
+    CategoryModel(
+      id: 'transport',
+      name: 'Transport',
+      iconCodePoint: Icons.directions_bus.codePoint,
+      colorValue: Colors.blue.value,
+    ),
+    CategoryModel(
+      id: 'shopping',
+      name: 'Shopping',
+      iconCodePoint: Icons.shopping_bag.codePoint,
+      colorValue: Colors.pink.value,
+    ),
+    CategoryModel(
+      id: 'utilities',
+      name: 'Utilities',
+      iconCodePoint: Icons.power.codePoint,
+      colorValue: Colors.amber.value,
+    ),
+    CategoryModel(
+      id: 'entertainment',
+      name: 'Entertainment',
+      iconCodePoint: Icons.movie.codePoint,
+      colorValue: Colors.purple.value,
+    ),
+    CategoryModel(
+      id: 'health',
+      name: 'Health',
+      iconCodePoint: Icons.medical_services.codePoint,
+      colorValue: Colors.red.value,
+    ),
+  ];
+
+  final otherCategory = CategoryModel(
+    id: 'other',
+    name: 'Other',
+    iconCodePoint: Icons.more_horiz.codePoint,
+    colorValue: Colors.grey.value,
+  );
+
+  // Merge lists, avoiding duplicates by name
+  final allCategories = [...defaultCategories];
+  
+  // Add personal categories
+  for (var userCat in personalCategories) {
+    if (!allCategories.any(
+          (element) => element.name.toLowerCase() == userCat.name.toLowerCase(),
+        ) &&
+        userCat.name.toLowerCase() != 'other') {
+      allCategories.add(userCat);
+    }
+  }
+
+  // Add group categories
+  for (var groupCat in groupCategories) {
+    if (!allCategories.any(
+          (element) => element.name.toLowerCase() == groupCat.name.toLowerCase(),
+        ) &&
+        groupCat.name.toLowerCase() != 'other') {
+      allCategories.add(groupCat);
+    }
+  }
+
+  // Always add "Other" at the end
+  allCategories.add(otherCategory);
+
+  return Stream.value(allCategories);
+});
+
+final personalTransactionsStreamProvider = StreamProvider<List<TransactionModel>>((ref) {
   final user = ref.watch(authStateProvider).value;
   if (user == null) return Stream.value([]);
 
@@ -130,17 +174,102 @@ final transactionsStreamProvider = StreamProvider<List<TransactionModel>>((
       });
 });
 
+final groupTransactionsStreamProvider = StreamProvider<List<TransactionModel>>((ref) {
+  final groupsAsync = ref.watch(userGroupsStreamProvider);
+
+  if (groupsAsync.value == null && groupsAsync.isLoading) {
+    return const Stream.empty();
+  }
+
+  final groups = groupsAsync.value ?? [];
+  if (groups.isEmpty) {
+    return Stream.value(<TransactionModel>[]);
+  }
+
+  final List<List<TransactionModel>> groupsTransactions = [];
+  for (var group in groups) {
+    final txsAsync = ref.watch(groupTransactionsStreamByIdProvider(group.id));
+    if (txsAsync.value != null) {
+      groupsTransactions.add(txsAsync.value!);
+    }
+  }
+
+  final combined = groupsTransactions.expand((x) => x).toList();
+  combined.sort((a, b) => b.date.compareTo(a.date));
+
+  return Stream.value(combined);
+});
+
+final transactionsStreamProvider = StreamProvider<List<TransactionModel>>((ref) {
+  final controller = StreamController<List<TransactionModel>>();
+
+  List<TransactionModel> personalList = [];
+  List<TransactionModel> groupList = [];
+
+  void emitCombined() {
+    final combined = [...personalList, ...groupList];
+    combined.sort((a, b) => b.date.compareTo(a.date));
+    if (!controller.isClosed) {
+      controller.add(combined);
+    }
+  }
+
+  // Set initial lists if they are already available in their respective providers
+  personalList = ref.read(personalTransactionsStreamProvider).value ?? [];
+  groupList = ref.read(groupTransactionsStreamProvider).value ?? [];
+  emitCombined();
+
+  ref.listen<AsyncValue<List<TransactionModel>>>(
+    personalTransactionsStreamProvider,
+    (previous, next) {
+      personalList = next.value ?? [];
+      emitCombined();
+    },
+    fireImmediately: true,
+  );
+
+  ref.listen<AsyncValue<List<TransactionModel>>>(
+    groupTransactionsStreamProvider,
+    (previous, next) {
+      groupList = next.value ?? [];
+      emitCombined();
+    },
+    fireImmediately: true,
+  );
+
+  ref.onDispose(() {
+    controller.close();
+  });
+
+  return controller.stream;
+});
+
 final transactionStatsProvider = Provider<TransactionStats>((ref) {
   final transactions = ref.watch(transactionsStreamProvider).value ?? [];
+  final user = ref.watch(authStateProvider).value;
+  final currentUserId = user?.uid;
 
   double totalIncome = 0;
   double totalExpense = 0;
 
   for (var t in transactions) {
+    double amount = t.amount;
+    if (t.isShared && t.splitWith != null && t.splitWith!.isNotEmpty) {
+      if (currentUserId != null && t.splitWith!.contains(currentUserId)) {
+        if (t.splitAmounts != null && t.splitAmounts!.containsKey(currentUserId)) {
+          amount = t.splitAmounts![currentUserId]!;
+        } else {
+          amount = t.amount / t.splitWith!.length;
+        }
+      } else {
+        amount = 0.0;
+      }
+    }
+
     if (t.isExpense) {
-      totalExpense += t.amount;
+      totalExpense += amount;
     } else {
-      totalIncome += t.amount;
+      totalIncome += amount;
     }
   }
 
@@ -163,14 +292,79 @@ class TransactionStats {
   });
 }
 
+final selectedHomeGroupIdFilterProvider = StateProvider<String>((ref) => 'all');
+
+final homeFilteredTransactionsStreamProvider = Provider<AsyncValue<List<TransactionModel>>>((ref) {
+  final transactionsAsync = ref.watch(transactionsStreamProvider);
+  final filter = ref.watch(selectedHomeGroupIdFilterProvider);
+
+  return transactionsAsync.whenData((transactions) {
+    if (filter == 'all') {
+      return transactions;
+    } else if (filter == 'personal') {
+      return transactions.where((t) => !t.isShared || t.groupId == null).toList();
+    } else {
+      return transactions.where((t) => t.isShared && t.groupId == filter).toList();
+    }
+  });
+});
+
+final homeFilteredTransactionStatsProvider = Provider<TransactionStats>((ref) {
+  final transactions = ref.watch(homeFilteredTransactionsStreamProvider).value ?? [];
+  final user = ref.watch(authStateProvider).value;
+  final currentUserId = user?.uid;
+
+  double totalIncome = 0;
+  double totalExpense = 0;
+
+  for (var t in transactions) {
+    double amount = t.amount;
+    if (t.isShared && t.splitWith != null && t.splitWith!.isNotEmpty) {
+      if (currentUserId != null && t.splitWith!.contains(currentUserId)) {
+        if (t.splitAmounts != null && t.splitAmounts!.containsKey(currentUserId)) {
+          amount = t.splitAmounts![currentUserId]!;
+        } else {
+          amount = t.amount / t.splitWith!.length;
+        }
+      } else {
+        amount = 0.0;
+      }
+    }
+
+    if (t.isExpense) {
+      totalExpense += amount;
+    } else {
+      totalIncome += amount;
+    }
+  }
+
+  return TransactionStats(
+    totalBalance: totalIncome - totalExpense,
+    totalIncome: totalIncome,
+    totalExpense: totalExpense,
+  );
+});
+
 final rotationOffsetProvider = StateProvider<double>((ref) => 0);
+
+final selectedStatsGroupIdFilterProvider = StateProvider<String>((ref) => 'all');
 
 final filteredTransactionsProvider = Provider<List<TransactionModel>>((ref) {
   final transactions = ref.watch(transactionsStreamProvider).value ?? [];
   final period = ref.watch(selectedPeriodProvider);
+  final filter = ref.watch(selectedStatsGroupIdFilterProvider);
   final now = DateTime.now();
 
-  return transactions.where((t) {
+  List<TransactionModel> groupFiltered;
+  if (filter == 'all') {
+    groupFiltered = transactions;
+  } else if (filter == 'personal') {
+    groupFiltered = transactions.where((t) => !t.isShared || t.groupId == null).toList();
+  } else {
+    groupFiltered = transactions.where((t) => t.isShared && t.groupId == filter).toList();
+  }
+
+  return groupFiltered.where((t) {
     if (period == StatisticsPeriod.day) {
       // Today (from midnight)
       final todayMidnight = DateTime(now.year, now.month, now.day);
@@ -190,10 +384,12 @@ final filteredTransactionsProvider = Provider<List<TransactionModel>>((ref) {
 
 final topSpendingProvider = Provider<List<TransactionModel>>((ref) {
   final transactions = ref.watch(filteredTransactionsProvider);
-  final expenses = transactions.where((t) => t.isExpense).toList();
+  final type = ref.watch(statisticsTypeProvider);
+  final isExpense = type == StatisticsType.expense;
+  final filtered = transactions.where((t) => t.isExpense == isExpense).toList();
 
-  expenses.sort((a, b) => b.amount.compareTo(a.amount));
-  return expenses;
+  filtered.sort((a, b) => b.amount.compareTo(a.amount));
+  return filtered;
 });
 
 class FinancialInsight {
@@ -414,15 +610,53 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
 
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
 
+  Future<void> _logGroupAction(String groupId, String action, String details, {String? targetUserId}) async {
+    final user = ref.read(firebaseAuthProvider).currentUser;
+    if (user == null) return;
+    
+    try {
+      final userSnap = await _firestore.collection('users').doc(user.uid).get();
+      final userName = userSnap.data()?['name'] as String? ?? 'Group Member';
+      
+      final groupSnap = await _firestore.collection('groups').doc(groupId).get();
+      final groupData = groupSnap.data();
+      final isAdmin = groupData?['adminId'] == user.uid;
+      final role = isAdmin ? 'admin' : 'member';
+      final groupType = groupData?['type'] as String? ?? 'split';
+      
+      if (groupType == 'business' && role != 'admin') {
+        return; // Only log Admin actions in business groups
+      }
+      
+      await _firestore.collection('groups').doc(groupId).collection('logs').add({
+        'userId': user.uid,
+        'userName': userName,
+        'userRole': role,
+        'action': action,
+        'details': details,
+        'targetUserId': targetUserId,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint("Failed to write group action log: $e");
+    }
+  }
+
   Future<bool> addTransaction({
     required double amount,
     required String description,
     required CategoryModel category,
     DateTime? date,
     bool isExpense = true,
+    bool isShared = false,
+    List<String>? splitWith,
+    String? targetGroupId,
+    Map<String, double>? splitAmounts,
+    String? overrideUserId,
   }) async {
     final user = ref.read(firebaseAuthProvider).currentUser;
     if (user == null) return false;
+    final groupId = targetGroupId ?? ref.read(userGroupIdProvider);
 
     state = const AsyncValue.loading();
     try {
@@ -435,15 +669,195 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
         iconCodePoint: category.iconCodePoint,
         colorValue: category.colorValue,
         date: date ?? DateTime.now(),
-        userId: user.uid,
+        userId: overrideUserId ?? user.uid,
         isExpense: isExpense,
+        isShared: isShared && groupId != null,
+        splitWith: (isShared && groupId != null) ? splitWith : null,
+        splitAmounts: (isShared && groupId != null) ? splitAmounts : null,
+        groupId: (isShared && groupId != null) ? groupId : null,
       );
 
-      await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('transactions')
-          .add(transaction.toMap());
+      if (isShared && groupId != null) {
+        await _firestore
+            .collection('groups')
+            .doc(groupId)
+            .collection('transactions')
+            .add(transaction.toMap());
+            
+        await _logGroupAction(
+          groupId,
+          'add',
+          "Added transaction: ₹${amount.toStringAsFixed(2)} (${isExpense ? 'Expense' : 'Income'}) for ${description.isNotEmpty ? description : category.name}",
+          targetUserId: overrideUserId ?? user.uid,
+        );
+      } else {
+        await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('transactions')
+            .add(transaction.toMap());
+      }
+
+      state = const AsyncValue.data(null);
+      return true;
+    } catch (e, stack) {
+      state = AsyncValue.error(e, stack);
+      return false;
+    }
+  }
+
+  Future<bool> editTransaction({
+    required TransactionModel originalTransaction,
+    required double amount,
+    required String description,
+    required CategoryModel category,
+    DateTime? date,
+    bool isExpense = true,
+    bool isShared = false,
+    List<String>? splitWith,
+    String? targetGroupId,
+    Map<String, double>? splitAmounts,
+  }) async {
+    final user = ref.read(firebaseAuthProvider).currentUser;
+    if (user == null) return false;
+    final groupId = targetGroupId ?? ref.read(userGroupIdProvider);
+
+    state = const AsyncValue.loading();
+    try {
+      final updated = TransactionModel(
+        id: originalTransaction.id,
+        amount: amount,
+        description: description,
+        categoryId: category.id,
+        categoryName: category.name,
+        iconCodePoint: category.iconCodePoint,
+        colorValue: category.colorValue,
+        date: date ?? originalTransaction.date,
+        userId: originalTransaction.userId,
+        isExpense: isExpense,
+        isShared: isShared && groupId != null,
+        splitWith: (isShared && groupId != null) ? splitWith : null,
+        splitAmounts: (isShared && groupId != null) ? splitAmounts : null,
+        groupId: (isShared && groupId != null) ? groupId : null,
+      );
+
+      if (isShared && groupId != null) {
+        await _firestore
+            .collection('groups')
+            .doc(groupId)
+            .collection('transactions')
+            .doc(originalTransaction.id)
+            .update(updated.toMap());
+            
+        final logDetails = <String>[];
+        if (originalTransaction.amount != amount) {
+          logDetails.add("Amount: ₹${originalTransaction.amount.toStringAsFixed(2)} -> ₹${amount.toStringAsFixed(2)}");
+        }
+        final oldCatName = originalTransaction.categoryName.isNotEmpty
+            ? originalTransaction.categoryName
+            : "No Category";
+        final newCatName = category.name.isNotEmpty
+            ? category.name
+            : "No Category";
+        if (originalTransaction.categoryId != category.id) {
+          logDetails.add("Category: $oldCatName -> $newCatName");
+        }
+        if (originalTransaction.description != description) {
+          logDetails.add("Note: '${originalTransaction.description}' -> '$description'");
+        }
+        if (originalTransaction.isExpense != isExpense) {
+          logDetails.add("Type: ${originalTransaction.isExpense ? 'Expense' : 'Income'} -> ${isExpense ? 'Expense' : 'Income'}");
+        }
+        final detailsStr = logDetails.isEmpty ? "Updated fields" : logDetails.join("; ");
+        await _logGroupAction(
+          groupId,
+          'edit',
+          "Edited transaction '${description.isNotEmpty ? description : category.name}': $detailsStr",
+          targetUserId: originalTransaction.userId,
+        );
+      } else {
+        await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('transactions')
+            .doc(originalTransaction.id)
+            .update(updated.toMap());
+      }
+
+      state = const AsyncValue.data(null);
+      return true;
+    } catch (e, stack) {
+      state = AsyncValue.error(e, stack);
+      return false;
+    }
+  }
+
+  Future<bool> deleteTransaction(TransactionModel transaction) async {
+    final user = ref.read(firebaseAuthProvider).currentUser;
+    if (user == null) return false;
+
+    state = const AsyncValue.loading();
+    try {
+      if (transaction.groupId != null) {
+        await _firestore
+            .collection('groups')
+            .doc(transaction.groupId)
+            .collection('transactions')
+            .doc(transaction.id)
+            .delete();
+            
+        await _logGroupAction(
+          transaction.groupId!,
+          'delete',
+          "Deleted transaction: ₹${transaction.amount.toStringAsFixed(2)} for ${transaction.description.isNotEmpty ? transaction.description : transaction.categoryName}",
+          targetUserId: transaction.userId,
+        );
+      } else {
+        await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('transactions')
+            .doc(transaction.id)
+            .delete();
+      }
+
+      state = const AsyncValue.data(null);
+      return true;
+    } catch (e, stack) {
+      state = AsyncValue.error(e, stack);
+      return false;
+    }
+  }
+
+  Future<bool> toggleTransactionType(TransactionModel transaction) async {
+    final user = ref.read(firebaseAuthProvider).currentUser;
+    if (user == null) return false;
+
+    state = const AsyncValue.loading();
+    try {
+      final newIsExpense = !transaction.isExpense;
+      if (transaction.groupId != null) {
+        await _firestore
+            .collection('groups')
+            .doc(transaction.groupId)
+            .collection('transactions')
+            .doc(transaction.id)
+            .update({'isExpense': newIsExpense});
+            
+        await _logGroupAction(
+          transaction.groupId!,
+          'toggle_type',
+          "Changed type of transaction '${transaction.description.isNotEmpty ? transaction.description : transaction.categoryName}' from ${transaction.isExpense ? 'Expense' : 'Income'} to ${newIsExpense ? 'Expense' : 'Income'}",
+          targetUserId: transaction.userId,
+        );
+      } else {
+        await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('transactions')
+            .doc(transaction.id)
+            .update({'isExpense': newIsExpense});
+      }
 
       state = const AsyncValue.data(null);
       return true;
@@ -461,6 +875,7 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
   }) async {
     final user = ref.read(firebaseAuthProvider).currentUser;
     if (user == null) return false;
+    final groupId = ref.read(userGroupIdProvider);
 
     try {
       final category = CategoryModel(
@@ -470,11 +885,19 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
         colorValue: color.value,
       );
 
-      await _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('categories')
-          .add(category.toMap());
+      if (groupId != null) {
+        await _firestore
+            .collection('groups')
+            .doc(groupId)
+            .collection('categories')
+            .add(category.toMap());
+      } else {
+        await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('categories')
+            .add(category.toMap());
+      }
 
       return true;
     } catch (e) {

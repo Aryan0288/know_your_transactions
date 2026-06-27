@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:know_your_expenses/features/transaction/model/model_transaction.dart';
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
+import 'package:know_your_expenses/features/home/view_model/view_model_group.dart';
 
 // ─── Colours ──────────────────────────────────────────────────────────────────
 const _kGreen = Color(0xFF2E8B57);
@@ -113,16 +114,13 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
                 opacity: _contentOpacity,
                 child: Consumer(
                   builder: (context, ref, _) {
-                    final selectedPeriod = ref.watch(selectedPeriodProvider);
                     final topSpending = ref.watch(topSpendingProvider);
                     return ListView(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
                       children: [
-                        _buildPeriodSelector(ref, selectedPeriod),
-                        const SizedBox(height: 16),
                         _buildChartCard(context, ref, topSpending),
                         const SizedBox(height: 20),
-                        _buildTopSpendingHeader(topSpending.length),
+                        _buildTopSpendingHeader(ref, topSpending.length),
                         const SizedBox(height: 12),
                         ..._buildTopSpendingItems(topSpending),
                       ],
@@ -139,6 +137,14 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
 
   // ─── Header ──────────────────────────────────────────────────────────────
   Widget _buildHeader() {
+    final selectedGroup = ref.watch(selectedStatsGroupIdFilterProvider);
+    final selectedPeriod = ref.watch(selectedPeriodProvider);
+    final selectedType = ref.watch(statisticsTypeProvider);
+
+    final isDefault = selectedGroup == 'all' &&
+        selectedPeriod == StatisticsPeriod.week &&
+        selectedType == StatisticsType.expense;
+
     return Stack(
       children: [
         ClipRRect(
@@ -190,7 +196,7 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
           child: SizedBox(
             height: 148,
             child: Padding(
-              padding: const EdgeInsets.only(left: 8,right: 8,bottom: 16),
+              padding: const EdgeInsets.only(left: 8, right: 8, bottom: 16),
               child: Row(
                 children: [
                   IconButton(
@@ -212,8 +218,49 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
                     ),
                   ),
                   const Spacer(),
-                  // Placeholder to balance the back button
-                  const SizedBox(width: 48),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: GestureDetector(
+                      onTap: () => _showFilterBottomSheet(context),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              const Icon(
+                                Icons.filter_list_rounded,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                              if (!isDefault)
+                                Positioned(
+                                  right: -2,
+                                  top: -2,
+                                  child: Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: const BoxDecoration(
+                                      color: Colors.amberAccent,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Apply',
+                            style: GoogleFonts.manrope(
+                              fontSize: 10,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -330,6 +377,109 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
     }
   }
 
+  Widget _buildTypeSelector(WidgetRef ref, StatisticsType selectedType) {
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: _kGreen.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final itemWidth = constraints.maxWidth / 2;
+          return Stack(
+            children: [
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                left: selectedType == StatisticsType.expense ? 0 : itemWidth,
+                child: Container(
+                  width: itemWidth,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [_kGreen, _kLightGreen],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _kGreen.withOpacity(0.35),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        ref.read(statisticsTypeProvider.notifier).state =
+                            StatisticsType.expense;
+                        ref.read(touchedIndexProvider.notifier).state = -1;
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Center(
+                        child: Text(
+                          'Expense',
+                          style: GoogleFonts.manrope(
+                            color: selectedType == StatisticsType.expense
+                                ? Colors.white
+                                : Colors.grey.shade500,
+                            fontWeight: selectedType == StatisticsType.expense
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        ref.read(statisticsTypeProvider.notifier).state =
+                            StatisticsType.income;
+                        ref.read(touchedIndexProvider.notifier).state = -1;
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Center(
+                        child: Text(
+                          'Income',
+                          style: GoogleFonts.manrope(
+                            color: selectedType == StatisticsType.income
+                                ? Colors.white
+                                : Colors.grey.shade500,
+                            fontWeight: selectedType == StatisticsType.income
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   // ─── Chart Card ───────────────────────────────────────────────────────────
   Widget _buildChartCard(
     BuildContext context,
@@ -337,10 +487,12 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
     List<TransactionModel> transactions,
   ) {
     final touchedIndex = ref.watch(touchedIndexProvider);
+    final type = ref.watch(statisticsTypeProvider);
+    final isExpense = type == StatisticsType.expense;
 
     final Map<String, double> categoryTotals = {};
     for (var t in transactions) {
-      if (!t.isExpense) continue;
+      if (t.isExpense != isExpense) continue;
       categoryTotals[t.categoryName] =
           (categoryTotals[t.categoryName] ?? 0) + t.amount;
     }
@@ -374,7 +526,7 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
           Row(
             children: [
               Text(
-                'Expense Breakdown',
+                isExpense ? 'Expense Breakdown' : 'Income Breakdown',
                 style: GoogleFonts.manrope(
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
@@ -407,7 +559,9 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'No expenses in this period',
+                      isExpense
+                          ? 'No expenses in this period'
+                          : 'No income in this period',
                       style: GoogleFonts.manrope(
                         fontSize: 13,
                         color: Colors.grey.shade400,
@@ -551,8 +705,11 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
 
     print("transactions ---- $transactions");
 
+    final type = ref.watch(statisticsTypeProvider);
+    final isExpense = type == StatisticsType.expense;
+
     for (var t in transactions) {
-      if (!t.isExpense) continue;
+      if (t.isExpense != isExpense) continue;
       categoryTotals[t.categoryName] =
           (categoryTotals[t.categoryName] ?? 0) + t.amount;
       categoryColors[t.categoryName] = t.color;
@@ -629,7 +786,9 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
   }
 
   // ─── Top Spending Header ──────────────────────────────────────────────────
-  Widget _buildTopSpendingHeader(int count) {
+  Widget _buildTopSpendingHeader(WidgetRef ref, int count) {
+    final type = ref.watch(statisticsTypeProvider);
+    final isExpense = type == StatisticsType.expense;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Row(
@@ -648,7 +807,7 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
           ),
           const SizedBox(width: 10),
           Text(
-            'Top Spending',
+            isExpense ? 'Top Spending' : 'Top Income',
             style: GoogleFonts.manrope(
               fontSize: 18,
               fontWeight: FontWeight.w800,
@@ -762,15 +921,17 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEA3636).withOpacity(0.08),
+                  color: t.isExpense
+                      ? const Color(0xFFEA3636).withOpacity(0.08)
+                      : const Color(0xFF2E8B57).withOpacity(0.08),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  '-₹${t.amount.toStringAsFixed(2)}',
+                  '${t.isExpense ? '-' : '+'}₹${t.amount.toStringAsFixed(2)}',
                   style: GoogleFonts.manrope(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
-                    color: const Color(0xFFEA3636),
+                    color: t.isExpense ? const Color(0xFFEA3636) : const Color(0xFF2E8B57),
                   ),
                 ),
               ),
@@ -801,4 +962,273 @@ AppBar appBarWithoutProgress(
     centerTitle: true,
     actions: actions,
   );
+}
+
+void _showFilterBottomSheet(BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.white,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    builder: (context) => const _StatsFilterBottomSheet(),
+  );
+}
+
+class _StatsFilterBottomSheet extends ConsumerWidget {
+  const _StatsFilterBottomSheet();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectedGroup = ref.watch(selectedStatsGroupIdFilterProvider);
+    final selectedPeriod = ref.watch(selectedPeriodProvider);
+    final selectedType = ref.watch(statisticsTypeProvider);
+    final groupsAsync = ref.watch(userGroupsStreamProvider);
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).viewInsets.bottom + 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Drag handle
+          Center(
+            child: Container(
+              width: 38,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Filters',
+                style: GoogleFonts.manrope(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF1E232A),
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  ref.read(selectedStatsGroupIdFilterProvider.notifier).state = 'all';
+                  ref.read(selectedPeriodProvider.notifier).state = StatisticsPeriod.week;
+                  ref.read(statisticsTypeProvider.notifier).state = StatisticsType.expense;
+                  Navigator.pop(context);
+                },
+                child: Text(
+                  'Reset All',
+                  style: GoogleFonts.manrope(
+                    color: _kGreen,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+          const SizedBox(height: 20),
+
+          // 1. Group Filter
+          Text(
+            'Select Space',
+            style: GoogleFonts.manrope(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Colors.grey[700],
+            ),
+          ),
+          const SizedBox(height: 8),
+          groupsAsync.when(
+            data: (groups) {
+              final items = [
+                _FilterItem(id: 'all', name: 'All Spaces'),
+                _FilterItem(id: 'personal', name: 'Personal Space'),
+                ...groups.map((g) => _FilterItem(id: g.id, name: g.name)),
+              ];
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F8F5),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.withOpacity(0.1)),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: selectedGroup,
+                    isExpanded: true,
+                    dropdownColor: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    icon: const Icon(Icons.arrow_drop_down_rounded, color: _kGreen),
+                    items: items.map((item) {
+                      return DropdownMenuItem<String>(
+                        value: item.id,
+                        child: Text(
+                          item.name,
+                          style: GoogleFonts.manrope(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: const Color(0xFF1E2D2C),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        ref.read(selectedStatsGroupIdFilterProvider.notifier).state = val;
+                      }
+                    },
+                  ),
+                ),
+              );
+            },
+            loading: () => const Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: _kGreen),
+              ),
+            ),
+            error: (e, s) => const SizedBox(),
+          ),
+          const SizedBox(height: 24),
+
+          // 2. Period Filter
+          Text(
+            'Time Frame',
+            style: GoogleFonts.manrope(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Colors.grey[700],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: StatisticsPeriod.values.map((period) {
+              final isSelected = selectedPeriod == period;
+              final name = period.name[0].toUpperCase() + period.name.substring(1);
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: ChoiceChip(
+                    label: Center(
+                      child: Text(
+                        name,
+                        style: GoogleFonts.manrope(
+                          fontSize: 12,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          color: isSelected ? Colors.white : const Color(0xFF1E2D2C),
+                        ),
+                      ),
+                    ),
+                    selected: isSelected,
+                    selectedColor: _kGreen,
+                    backgroundColor: const Color(0xFFF3F8F5),
+                    checkmarkColor: Colors.white,
+                    showCheckmark: false,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide.none,
+                    ),
+                    onSelected: (selected) {
+                      if (selected) {
+                        ref.read(selectedPeriodProvider.notifier).state = period;
+                      }
+                    },
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 24),
+
+          // 3. Type Filter
+          Text(
+            'Transaction Type',
+            style: GoogleFonts.manrope(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Colors.grey[700],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: StatisticsType.values.map((type) {
+              final isSelected = selectedType == type;
+              final name = type == StatisticsType.expense ? 'Expenses' : 'Income';
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: ChoiceChip(
+                    label: Center(
+                      child: Text(
+                        name,
+                        style: GoogleFonts.manrope(
+                          fontSize: 12,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          color: isSelected ? Colors.white : const Color(0xFF1E2D2C),
+                        ),
+                      ),
+                    ),
+                    selected: isSelected,
+                    selectedColor: _kGreen,
+                    backgroundColor: const Color(0xFFF3F8F5),
+                    checkmarkColor: Colors.white,
+                    showCheckmark: false,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide.none,
+                    ),
+                    onSelected: (selected) {
+                      if (selected) {
+                        ref.read(statisticsTypeProvider.notifier).state = type;
+                      }
+                    },
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 32),
+
+          // Apply Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kGreen,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                elevation: 0,
+              ),
+              child: Text(
+                'Apply Filters',
+                style: GoogleFonts.manrope(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterItem {
+  final String id;
+  final String name;
+  _FilterItem({required this.id, required this.name});
 }
