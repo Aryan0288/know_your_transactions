@@ -936,7 +936,16 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                         return;
                       }
 
-                      final selectedSpace = selectedGroupIdNotifier.value;
+                      final userGroupsAsync = ref.read(userGroupsStreamProvider);
+                      final groupsListEmpty = userGroupsAsync.when(
+                        data: (groups) => groups.isEmpty,
+                        loading: () => false,
+                        error: (_, __) => false,
+                      );
+
+                      final selectedSpace = selectedGroupIdNotifier.value ?? 
+                          (groupsListEmpty ? 'personal' : null);
+
                       if (selectedSpace == null) {
                         Utils.showErrorToast(
                           context,
