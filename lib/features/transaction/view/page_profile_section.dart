@@ -10,6 +10,7 @@ import 'package:know_your_expenses/features/home/view/page_home.dart';
 import 'package:know_your_expenses/features/login_signup/view/page_sign_in.dart';
 import 'package:know_your_expenses/features/transaction/view/page_personal_profile.dart';
 import 'package:know_your_expenses/features/transaction/view/page_group_settings.dart';
+import 'package:know_your_expenses/features/transaction/view/widgets/widget_export_bottom_sheet.dart';
 import 'package:know_your_expenses/features/transaction/view/page_split_ledger.dart';
 
 class ProfileSectionPage extends ConsumerWidget {
@@ -131,6 +132,41 @@ class ProfileSectionPage extends ConsumerWidget {
                         ],
                       );
                     },
+                  ),
+                  const SizedBox(height: 16),
+                  _sectionLabel('Reports & Statements'),
+                  const SizedBox(height: 12),
+                  _MenuCard(
+                    items: [
+                      _MenuItemData(
+                        icon: Icons.picture_as_pdf_rounded,
+                        title: 'Export Statements',
+                        subtitle: 'Download PDF or CSV reports of your activity',
+                        iconColor: const Color(0xFF429690),
+                        iconBg: const Color(0xFFE6F7F6),
+                        onTap: () {
+                          final user = ref.read(firebaseAuthProvider).currentUser;
+                          if (user == null) {
+                            CustomDialogs.showSignInRequiredDialog(
+                              context,
+                              onSignInTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => SignInPage()),
+                                );
+                              },
+                            );
+                          } else {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => const ExportBottomSheet(),
+                            );
+                          }
+                        },
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
                   _sectionLabel('Session'),

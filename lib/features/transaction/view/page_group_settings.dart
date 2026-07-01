@@ -10,6 +10,7 @@ import 'package:know_your_expenses/features/home/view_model/view_model_group.dar
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
 import 'package:know_your_expenses/features/helper/utils.dart';
 import 'package:know_your_expenses/features/transaction/view/widgets/widget_create_group_bottom_sheet.dart';
+import 'package:know_your_expenses/features/common_widgets/closable_banner_ad.dart';
 
 class GroupSettingsPage extends ConsumerStatefulWidget {
   const GroupSettingsPage({super.key});
@@ -395,6 +396,7 @@ class _GroupSettingsPageState extends ConsumerState<GroupSettingsPage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FE),
+      bottomNavigationBar: const ClosableBannerAd(),
       appBar: AppBar(
         title: Text(
           'Group Settings',

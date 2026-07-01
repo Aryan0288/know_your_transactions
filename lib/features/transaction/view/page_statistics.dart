@@ -8,6 +8,8 @@ import 'package:know_your_expenses/features/transaction/model/model_transaction.
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_group.dart';
 
+import 'package:know_your_expenses/features/common_widgets/closable_banner_ad.dart';
+
 // ─── Colours ──────────────────────────────────────────────────────────────────
 const _kGreen = Color(0xFF2E8B57);
 const _kLightGreen = Color(0xFF3EAF78);
@@ -130,6 +132,7 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
               ),
             ),
           ),
+          const ClosableBannerAd(),
         ],
       ),
     );

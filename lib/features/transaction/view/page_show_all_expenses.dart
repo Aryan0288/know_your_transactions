@@ -6,12 +6,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:know_your_expenses/features/common_widgets/common_widgets_scaffold.dart';
+import 'package:know_your_expenses/features/helper/utils.dart';
+import 'package:know_your_expenses/features/helper/pdf_helper.dart';
+import 'package:know_your_expenses/features/home/model/group_model.dart';
+import 'package:know_your_expenses/features/transaction/view/widgets/widget_export_bottom_sheet.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_home.dart';
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
 import 'package:know_your_expenses/features/transaction/model/model_transaction.dart';
 import 'package:know_your_expenses/features/transaction/view/page_split_ledger.dart';
 import 'package:know_your_expenses/features/transaction/view/dialog_transaction_detail.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_group.dart';
+import 'package:know_your_expenses/features/common_widgets/closable_banner_ad.dart';
 import 'package:know_your_expenses/features/transaction/view/widgets/widget_home_filter_bottom_sheet.dart';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -108,6 +113,7 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
   Widget build(BuildContext context) {
     return CommonScaffold(
       backgroundColor: const Color(0xFFF4F7F6),
+      bottomNavigationBar: const ClosableBannerAd(),
       body: Column(
         children: [
           // ─── Fixed Header ────────────────────────────────────────────────
@@ -187,6 +193,43 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                                         fontWeight: FontWeight.w600,
                                         color: _kGreen,
                                       ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(width: 14),
+                              Consumer(
+                                builder: (context, ref, _) {
+                                  return GestureDetector(
+                                    onTap: () {
+                                      final selectedFilter = ref.read(selectedHomeGroupIdFilterProvider);
+                                      showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        backgroundColor: Colors.transparent,
+                                        builder: (_) => ExportBottomSheet(
+                                          initialGroupId: selectedFilter,
+                                        ),
+                                      );
+                                    },
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.picture_as_pdf_rounded,
+                                          color: _kGreen,
+                                          size: 24,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Export',
+                                          style: GoogleFonts.manrope(
+                                            fontSize: 10,
+                                            color: _kGreen,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   );
                                 },
@@ -371,7 +414,6 @@ class _AnimatedHeader extends ConsumerWidget {
   final Animation<Offset> cardSlide;
   final Animation<double> cardOpacity;
   final String greeting;
-
   const _AnimatedHeader({
     required this.greetingSlide,
     required this.greetingOpacity,
@@ -547,6 +589,7 @@ class _AnimatedHeader extends ConsumerWidget {
             ),
           ),
         ),
+        // Ad removed from header stack
       ],
     );
   }

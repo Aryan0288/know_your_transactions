@@ -13,6 +13,9 @@ import 'package:know_your_expenses/features/transaction/view/dialog_transaction_
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:know_your_expenses/features/transaction/view/widgets/widget_overall_balance_card.dart';
 import 'package:know_your_expenses/features/transaction/view/widgets/widget_group_ledger_card.dart';
+import 'package:know_your_expenses/features/common_widgets/closable_banner_ad.dart';
+import 'package:know_your_expenses/features/helper/pdf_helper.dart';
+import 'package:know_your_expenses/features/transaction/view/widgets/widget_export_bottom_sheet.dart';
 
 final selectedGroupFilterProvider = StateProvider<String?>((ref) => null);
 final groupsHubTabProvider = StateProvider<int>(
@@ -147,7 +150,31 @@ class SplitLedgerPage extends ConsumerWidget {
                     ),
                   ),
                   const Spacer(),
-                  const SizedBox(width: 48),
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final selectedGroupId = ref.watch(selectedGroupFilterProvider);
+                      if (selectedGroupId != null) {
+                        return IconButton(
+                          icon: const Icon(
+                            Icons.picture_as_pdf_rounded,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                          onPressed: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => ExportBottomSheet(
+                                initialGroupId: selectedGroupId,
+                              ),
+                            );
+                          },
+                        );
+                      }
+                      return const SizedBox(width: 48);
+                    },
+                  ),
                 ],
               ),
             ),
@@ -248,6 +275,7 @@ class SplitLedgerPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FE),
+      bottomNavigationBar: const ClosableBannerAd(),
       body: currentUserId == null
           ? _buildNoGroupView(
               context,

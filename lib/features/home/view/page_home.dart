@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:know_your_expenses/features/home/view/widget/widget_floating_icon.dart';
 import 'package:know_your_expenses/features/common_widgets/common_widgets_png.dart';
 import 'package:know_your_expenses/features/transaction/view/page_expense_transaction.dart';
+import 'package:know_your_expenses/features/common_widgets/closable_banner_ad.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -376,24 +377,30 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       ),
 
       // ─── Bottom Button ───
-      bottomNavigationBar: SlideTransition(
-        position: _btnSlide,
-        child: FadeTransition(
-          opacity: _btnOpacity,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 36),
-            child: _GetStartedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => AddExpensePageHomePage(),
-                  ),
-                );
-              },
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const ClosableBannerAd(),
+          SlideTransition(
+            position: _btnSlide,
+            child: FadeTransition(
+              opacity: _btnOpacity,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 36),
+                child: _GetStartedButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AddExpensePageHomePage(),
+                      ),
+                    );
+                  },
+                ),
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

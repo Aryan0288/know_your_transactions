@@ -390,7 +390,10 @@ class GroupController extends StateNotifier<AsyncValue<void>> {
       );
 
       // Create group document
-      await groupDocRef.set(group.toMap());
+      await groupDocRef.set({
+        ...group.toMap(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
 
       // Update user document
       await _firestore.collection('users').doc(user.uid).update({

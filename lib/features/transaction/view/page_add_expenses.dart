@@ -8,6 +8,7 @@ import 'package:know_your_expenses/features/home/view_model/view_model_group.dar
 import 'package:know_your_expenses/features/home/view_model/view_model_home.dart';
 import 'package:know_your_expenses/features/transaction/model/model_transaction.dart';
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
+import 'package:know_your_expenses/features/helper/ad_helper.dart';
 
 class AddExpensePage extends ConsumerStatefulWidget {
   final double? initialAmount;
@@ -1195,7 +1196,11 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                               ? "Transaction Updated Successfully!"
                               : "Transaction Saved Successfully!",
                         );
-                        Navigator.pop(context);
+                        AdHelper.showInterstitialAd(() {
+                          if (mounted) {
+                            Navigator.pop(context);
+                          }
+                        });
                       }
                     },
                     title: widget.editTransaction != null ? 'Update Transaction' : 'Save Transaction',
