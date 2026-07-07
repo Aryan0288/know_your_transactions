@@ -7,11 +7,28 @@ import 'package:know_your_expenses/core/widgets/custom_dialogs.dart';
 
 import 'package:know_your_expenses/features/home/view_model/view_model_home.dart';
 
-class PersonalProfilePage extends ConsumerWidget {
+class PersonalProfilePage extends ConsumerStatefulWidget {
   const PersonalProfilePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PersonalProfilePage> createState() => _PersonalProfilePageState();
+}
+
+class _PersonalProfilePageState extends ConsumerState<PersonalProfilePage> {
+  bool _isEditing = false;
+  bool _initialized = false;
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final userDataAsync = ref.watch(userDataProvider);
     final user = ref.watch(firebaseAuthProvider).currentUser;
 
@@ -99,6 +116,12 @@ class PersonalProfilePage extends ConsumerWidget {
           final userPhone = userData['phone'] ?? 'No phone number';
           final photoUrl = userData['photoUrl'];
 
+          if (!_initialized) {
+            _nameController.text = userName;
+            _phoneController.text = userPhone == 'No phone number' ? '' : userPhone;
+            _initialized = true;
+          }
+
           return CustomScrollView(
             slivers: [
               SliverAppBar(
@@ -115,6 +138,55 @@ class PersonalProfilePage extends ConsumerWidget {
                     color: Colors.white,
                   ),
                 ),
+                actions: [
+                  if (_isEditing)
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Colors.white),
+                      tooltip: 'Cancel',
+                      onPressed: () {
+                        setState(() {
+                          _isEditing = false;
+                          _nameController.text = userName;
+                          _phoneController.text = userPhone == 'No phone number' ? '' : userPhone;
+                        });
+                      },
+                    ),
+                  IconButton(
+                    icon: Icon(_isEditing ? Icons.check_rounded : Icons.edit_rounded, color: Colors.white),
+                    tooltip: _isEditing ? 'Save Changes' : 'Edit Profile',
+                    onPressed: () async {
+                      if (_isEditing) {
+                        final nameInput = _nameController.text.trim();
+                        final phoneInput = _phoneController.text.trim();
+                        if (nameInput.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Name cannot be empty')),
+                          );
+                          return;
+                        }
+                        CustomDialogs.showLoadingDialog(context, "Saving Profile...");
+                        final success = await ref
+                            .read(transactionViewModelProvider.notifier)
+                            .updatePersonalDetails(name: nameInput, phone: phoneInput);
+                        if (mounted) {
+                          Navigator.pop(context); // Dismiss loading dialog
+                          if (success) {
+                            setState(() => _isEditing = false);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Profile updated successfully!')),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Failed to update profile.')),
+                            );
+                          }
+                        }
+                      } else {
+                        setState(() => _isEditing = true);
+                      }
+                    },
+                  ),
+                ],
                 flexibleSpace: FlexibleSpaceBar(
                   collapseMode: CollapseMode.parallax,
                   background: _ProfileHeader(
@@ -126,7 +198,7 @@ class PersonalProfilePage extends ConsumerWidget {
                       final success = await ref
                           .read(transactionViewModelProvider.notifier)
                           .updateProfileImage();
-                      if (context.mounted) {
+                      if (mounted) {
                         Navigator.pop(context);
                         if (!success) {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -147,11 +219,15 @@ class PersonalProfilePage extends ConsumerWidget {
                       _sectionLabel('Profile Details'),
                       const SizedBox(height: 12),
                       _buildInfoCard([
-                        _buildProfileRow('Full Name', userName, Icons.person_outline),
+                        _isEditing
+                            ? _buildEditProfileRow('Full Name', _nameController, Icons.person_outline)
+                            : _buildProfileRow('Full Name', userName, Icons.person_outline),
                         _buildDivider(),
                         _buildProfileRow('Email Address', userEmail, Icons.email_outlined),
                         _buildDivider(),
-                        _buildProfileRow('Phone Number', userPhone, Icons.phone_outlined),
+                        _isEditing
+                            ? _buildEditProfileRow('Phone Number', _phoneController, Icons.phone_outlined, keyboardType: TextInputType.phone)
+                            : _buildProfileRow('Phone Number', userPhone.isEmpty ? 'No phone number' : userPhone, Icons.phone_outlined),
                       ]),
                       const SizedBox(height: 28),
                       _sectionLabel('Account'),
@@ -211,6 +287,61 @@ class PersonalProfilePage extends ConsumerWidget {
     return const Padding(
       padding: EdgeInsets.only(left: 72),
       child: Divider(height: 1, color: Color(0xFFF0F0F0)),
+    );
+  }
+
+  Widget _buildEditProfileRow(String label, TextEditingController controller, IconData icon, {TextInputType? keyboardType}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF56C1BB), Color(0xFF2E7D79)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: Colors.white, size: 18),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.manrope(
+                    fontSize: 11,
+                    color: const Color(0xFF9BA5B4),
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                TextField(
+                  controller: controller,
+                  keyboardType: keyboardType,
+                  style: GoogleFonts.manrope(
+                    fontSize: 15,
+                    color: const Color(0xFF1A2332),
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 4),
+                    border: InputBorder.none,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

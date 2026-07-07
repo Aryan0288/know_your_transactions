@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -815,7 +816,7 @@ class _AnimatedTransactionTileState extends State<_AnimatedTransactionTile>
 }
 
 // ─── Transaction Tile ─────────────────────────────────────────────────────────
-class _TransactionTile extends StatelessWidget {
+class _TransactionTile extends ConsumerWidget {
   final TransactionModel transaction;
 
   const _TransactionTile({required this.transaction});
@@ -845,8 +846,22 @@ class _TransactionTile extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final isExpense = transaction.isExpense;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userGroupsAsync = ref.watch(userGroupsStreamProvider);
+    final groups = userGroupsAsync.value ?? [];
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+
+    GroupModel? targetGroup;
+    for (final g in groups) {
+      if (g.id == transaction.groupId) {
+        targetGroup = g;
+        break;
+      }
+    }
+    final isWagesGroup = targetGroup?.toMap()['type'] == 'wages';
+    final isRecipient = transaction.splitWith != null && transaction.splitWith!.contains(currentUserId);
+    final isExpense = isWagesGroup && isRecipient ? false : transaction.isExpense;
+
     final amountColor = isExpense
         ? const Color(0xFFE57373)
         : const Color(0xFF66BB6A);

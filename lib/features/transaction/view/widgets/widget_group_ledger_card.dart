@@ -26,6 +26,7 @@ class GroupLedgerCard extends ConsumerWidget {
 
     final groupType = group.toMap()['type'] as String? ?? 'split';
     final isBusiness = groupType == 'business';
+    final isWages = groupType == 'wages';
 
     final userBalances = isBusiness
         ? <SplitBalance>[]
@@ -46,10 +47,21 @@ class GroupLedgerCard extends ConsumerWidget {
     }
 
     double totalUserSpending = 0.0;
+    double totalWagesPaidOrReceived = 0.0;
+
     for (var t in transactions) {
       if (isBusiness) {
         if (t.userId == currentUserId) {
           totalUserSpending += t.amount;
+        }
+      } else if (isWages) {
+        final isAdmin = group.adminId == currentUserId || (group.admins?.contains(currentUserId) ?? false);
+        if (isAdmin) {
+          totalWagesPaidOrReceived += t.amount;
+        } else {
+          if (t.splitWith != null && t.splitWith!.contains(currentUserId)) {
+            totalWagesPaidOrReceived += t.amount;
+          }
         }
       } else {
         if (t.isShared &&
@@ -99,16 +111,16 @@ class GroupLedgerCard extends ConsumerWidget {
                 decoration: BoxDecoration(
                   color: isBusiness
                       ? const Color(0xFFE3F2FD)
-                      : const Color(0xFFE6F3F2),
+                      : (isWages ? Colors.indigo.withOpacity(0.12) : const Color(0xFFE6F3F2)),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   isBusiness
                       ? Icons.business_center_rounded
-                      : Icons.group_rounded,
+                      : (isWages ? Icons.payments : Icons.group_rounded),
                   color: isBusiness
                       ? Colors.blue[800]
-                      : const Color(0xFF2E7D79),
+                      : (isWages ? Colors.indigo : const Color(0xFF2E7D79)),
                   size: 20,
                 ),
               ),
@@ -118,13 +130,17 @@ class GroupLedgerCard extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          group.name,
-                          style: GoogleFonts.manrope(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: const Color(0xFF1E232A),
+                        Expanded(
+                          child: Text(
+                            group.name,
+                            style: GoogleFonts.manrope(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF1E232A),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -136,22 +152,22 @@ class GroupLedgerCard extends ConsumerWidget {
                           decoration: BoxDecoration(
                             color: isBusiness
                                 ? Colors.blue[50]
-                                : const Color(0xFFE6F3F2),
+                                : (isWages ? Colors.indigo[50] : const Color(0xFFE6F3F2)),
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(
                               color: isBusiness
                                   ? Colors.blue[100]!
-                                  : Colors.transparent,
+                                  : (isWages ? Colors.indigo[100]! : Colors.transparent),
                             ),
                           ),
                           child: Text(
-                            isBusiness ? 'Business' : 'Split',
+                            isBusiness ? 'Business' : (isWages ? 'Wages' : 'Split'),
                             style: GoogleFonts.manrope(
                               fontSize: 9,
                               fontWeight: FontWeight.bold,
                               color: isBusiness
                                   ? Colors.blue[800]
-                                  : const Color(0xFF2E7D79),
+                                  : (isWages ? Colors.indigo[800] : const Color(0xFF2E7D79)),
                             ),
                           ),
                         ),
@@ -161,7 +177,11 @@ class GroupLedgerCard extends ConsumerWidget {
                     Text(
                       isBusiness
                           ? 'Your total spending: ₹${totalUserSpending.toStringAsFixed(2)}'
-                          : 'Your total spending here: ₹${totalUserSpending.toStringAsFixed(2)}',
+                          : isWages
+                              ? (group.adminId == currentUserId || (group.admins?.contains(currentUserId) ?? false)
+                                  ? 'Total wages paid: ₹${totalWagesPaidOrReceived.toStringAsFixed(2)}'
+                                  : 'Total wages received: ₹${totalWagesPaidOrReceived.toStringAsFixed(2)}')
+                              : 'Your total spending here: ₹${totalUserSpending.toStringAsFixed(2)}',
                       style: GoogleFonts.manrope(
                         fontSize: 12,
                         color: Colors.grey[600],
@@ -171,7 +191,7 @@ class GroupLedgerCard extends ConsumerWidget {
                   ],
                 ),
               ),
-              if (!isBusiness)
+              if (!isBusiness && !isWages)
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -197,7 +217,7 @@ class GroupLedgerCard extends ConsumerWidget {
             ],
           ),
 
-          if (!isBusiness && userBalances.isNotEmpty) ...[
+          if (!isBusiness && !isWages && userBalances.isNotEmpty) ...[
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 12),
               child: Divider(height: 1, color: Color(0xFFF0F2F5)),

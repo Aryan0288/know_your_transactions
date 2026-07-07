@@ -248,6 +248,7 @@ final transactionStatsProvider = Provider<TransactionStats>((ref) {
   final transactions = ref.watch(transactionsStreamProvider).value ?? [];
   final user = ref.watch(authStateProvider).value;
   final currentUserId = user?.uid;
+  final groups = ref.watch(userGroupsStreamProvider).value ?? [];
 
   double totalIncome = 0;
   double totalExpense = 0;
@@ -266,7 +267,17 @@ final transactionStatsProvider = Provider<TransactionStats>((ref) {
       }
     }
 
-    if (t.isExpense) {
+    // Wages received by employee = income, not expense
+    bool isExpenseForUser = t.isExpense;
+    if (t.groupId != null && currentUserId != null) {
+      final group = groups.where((g) => g.id == t.groupId).firstOrNull;
+      if (group != null && group.toMap()['type'] == 'wages' &&
+          t.splitWith != null && t.splitWith!.contains(currentUserId)) {
+        isExpenseForUser = false;
+      }
+    }
+
+    if (isExpenseForUser) {
       totalExpense += amount;
     } else {
       totalIncome += amount;
@@ -313,6 +324,7 @@ final homeFilteredTransactionStatsProvider = Provider<TransactionStats>((ref) {
   final transactions = ref.watch(homeFilteredTransactionsStreamProvider).value ?? [];
   final user = ref.watch(authStateProvider).value;
   final currentUserId = user?.uid;
+  final groups = ref.watch(userGroupsStreamProvider).value ?? [];
 
   double totalIncome = 0;
   double totalExpense = 0;
@@ -331,7 +343,17 @@ final homeFilteredTransactionStatsProvider = Provider<TransactionStats>((ref) {
       }
     }
 
-    if (t.isExpense) {
+    // Wages received by employee = income, not expense
+    bool isExpenseForUser = t.isExpense;
+    if (t.groupId != null && currentUserId != null) {
+      final group = groups.where((g) => g.id == t.groupId).firstOrNull;
+      if (group != null && group.toMap()['type'] == 'wages' &&
+          t.splitWith != null && t.splitWith!.contains(currentUserId)) {
+        isExpenseForUser = false;
+      }
+    }
+
+    if (isExpenseForUser) {
       totalExpense += amount;
     } else {
       totalIncome += amount;
@@ -620,12 +642,13 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
       
       final groupSnap = await _firestore.collection('groups').doc(groupId).get();
       final groupData = groupSnap.data();
-      final isAdmin = groupData?['adminId'] == user.uid;
+      final groupAdmins = List<String>.from(groupData?['admins'] ?? []);
+      final isAdmin = groupAdmins.contains(user.uid) || groupData?['adminId'] == user.uid;
       final role = isAdmin ? 'admin' : 'member';
       final groupType = groupData?['type'] as String? ?? 'split';
       
-      if (groupType == 'business' && role != 'admin') {
-        return; // Only log Admin actions in business groups
+      if ((groupType == 'business' || groupType == 'wages') && role != 'admin') {
+        return; // Only log Admin actions in business and wages groups
       }
       
       await _firestore.collection('groups').doc(groupId).collection('logs').add({
@@ -653,6 +676,7 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
     String? targetGroupId,
     Map<String, double>? splitAmounts,
     String? overrideUserId,
+    String? paymentMode,
   }) async {
     final user = ref.read(firebaseAuthProvider).currentUser;
     if (user == null) return false;
@@ -675,9 +699,19 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
         splitWith: (isShared && groupId != null) ? splitWith : null,
         splitAmounts: (isShared && groupId != null) ? splitAmounts : null,
         groupId: (isShared && groupId != null) ? groupId : null,
+        paymentMode: paymentMode,
       );
 
       if (isShared && groupId != null) {
+        String? wagesTargetUserId;
+        final groupSnap = await _firestore.collection('groups').doc(groupId).get();
+        if (groupSnap.exists) {
+          final type = groupSnap.data()?['type'] as String?;
+          if (type == 'wages' && splitWith != null && splitWith.isNotEmpty) {
+            wagesTargetUserId = splitWith.first;
+          }
+        }
+
         await _firestore
             .collection('groups')
             .doc(groupId)
@@ -688,7 +722,7 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
           groupId,
           'add',
           "Added transaction: ₹${amount.toStringAsFixed(2)} (${isExpense ? 'Expense' : 'Income'}) for ${description.isNotEmpty ? description : category.name}",
-          targetUserId: overrideUserId ?? user.uid,
+          targetUserId: wagesTargetUserId ?? (overrideUserId ?? user.uid),
         );
       } else {
         await _firestore
@@ -717,6 +751,7 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
     List<String>? splitWith,
     String? targetGroupId,
     Map<String, double>? splitAmounts,
+    String? paymentMode,
   }) async {
     final user = ref.read(firebaseAuthProvider).currentUser;
     if (user == null) return false;
@@ -739,9 +774,19 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
         splitWith: (isShared && groupId != null) ? splitWith : null,
         splitAmounts: (isShared && groupId != null) ? splitAmounts : null,
         groupId: (isShared && groupId != null) ? groupId : null,
+        paymentMode: paymentMode,
       );
 
       if (isShared && groupId != null) {
+        String? wagesTargetUserId;
+        final groupSnap = await _firestore.collection('groups').doc(groupId).get();
+        if (groupSnap.exists) {
+          final type = groupSnap.data()?['type'] as String?;
+          if (type == 'wages' && splitWith != null && splitWith.isNotEmpty) {
+            wagesTargetUserId = splitWith.first;
+          }
+        }
+
         await _firestore
             .collection('groups')
             .doc(groupId)
@@ -773,7 +818,7 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
           groupId,
           'edit',
           "Edited transaction '${description.isNotEmpty ? description : category.name}': $detailsStr",
-          targetUserId: originalTransaction.userId,
+          targetUserId: wagesTargetUserId ?? (originalTransaction.splitWith?.firstOrNull ?? originalTransaction.userId),
         );
       } else {
         await _firestore
@@ -799,9 +844,18 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
     state = const AsyncValue.loading();
     try {
       if (transaction.groupId != null) {
+        String? wagesTargetUserId;
+        final groupSnap = await _firestore.collection('groups').doc(transaction.groupId!).get();
+        if (groupSnap.exists) {
+          final type = groupSnap.data()?['type'] as String?;
+          if (type == 'wages' && transaction.splitWith != null && transaction.splitWith!.isNotEmpty) {
+            wagesTargetUserId = transaction.splitWith!.first;
+          }
+        }
+
         await _firestore
             .collection('groups')
-            .doc(transaction.groupId)
+            .doc(transaction.groupId!)
             .collection('transactions')
             .doc(transaction.id)
             .delete();
@@ -810,7 +864,7 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
           transaction.groupId!,
           'delete',
           "Deleted transaction: ₹${transaction.amount.toStringAsFixed(2)} for ${transaction.description.isNotEmpty ? transaction.description : transaction.categoryName}",
-          targetUserId: transaction.userId,
+          targetUserId: wagesTargetUserId ?? (transaction.splitWith?.firstOrNull ?? transaction.userId),
         );
       } else {
         await _firestore
@@ -837,9 +891,18 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
     try {
       final newIsExpense = !transaction.isExpense;
       if (transaction.groupId != null) {
+        String? wagesTargetUserId;
+        final groupSnap = await _firestore.collection('groups').doc(transaction.groupId!).get();
+        if (groupSnap.exists) {
+          final type = groupSnap.data()?['type'] as String?;
+          if (type == 'wages' && transaction.splitWith != null && transaction.splitWith!.isNotEmpty) {
+            wagesTargetUserId = transaction.splitWith!.first;
+          }
+        }
+
         await _firestore
             .collection('groups')
-            .doc(transaction.groupId)
+            .doc(transaction.groupId!)
             .collection('transactions')
             .doc(transaction.id)
             .update({'isExpense': newIsExpense});
@@ -848,7 +911,7 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
           transaction.groupId!,
           'toggle_type',
           "Changed type of transaction '${transaction.description.isNotEmpty ? transaction.description : transaction.categoryName}' from ${transaction.isExpense ? 'Expense' : 'Income'} to ${newIsExpense ? 'Expense' : 'Income'}",
-          targetUserId: transaction.userId,
+          targetUserId: wagesTargetUserId ?? (transaction.splitWith?.firstOrNull ?? transaction.userId),
         );
       } else {
         await _firestore
@@ -987,6 +1050,26 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
         );
         return false;
       }
+    } catch (e, stack) {
+      state = AsyncValue.error(e, stack);
+      return false;
+    }
+  }
+
+  Future<bool> updatePersonalDetails({required String name, required String phone}) async {
+    final user = ref.read(firebaseAuthProvider).currentUser;
+    if (user == null) return false;
+
+    state = const AsyncValue.loading();
+    try {
+      await _firestore.collection('users').doc(user.uid).update({
+        'name': name,
+        'phone': phone,
+      });
+      state = const AsyncValue.data(null);
+      // Force refreshing user data provider
+      ref.invalidate(userDataProvider);
+      return true;
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
       return false;

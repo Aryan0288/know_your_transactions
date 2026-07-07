@@ -116,6 +116,23 @@ class _CreateGroupBottomSheetState extends State<CreateGroupBottomSheet> {
               },
             ),
           ),
+          Material(
+            color: Colors.transparent,
+            child: RadioListTile<String>(
+              contentPadding: EdgeInsets.zero,
+              title: Text('Wages / Salary Group', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 14)),
+              subtitle: Text('Admins record salary payments. Members only see their own wages.', style: GoogleFonts.manrope(fontSize: 11, color: Colors.grey[600])),
+              value: 'wages',
+              groupValue: _type,
+              activeColor: const Color(0xFF2E8B57),
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() => _type = val);
+                  widget.onTypeChanged(val);
+                }
+              },
+            ),
+          ),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,

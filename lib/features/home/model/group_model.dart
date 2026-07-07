@@ -4,7 +4,8 @@ class GroupModel {
   final String adminId;
   final List<String> members;
   final Map<String, double> memberLimits;
-  final String type; // 'split' or 'business'
+  final String type; // 'split', 'business', or 'wages'
+  final List<String> admins;
 
   GroupModel({
     required this.id,
@@ -13,6 +14,7 @@ class GroupModel {
     required this.members,
     required this.memberLimits,
     required this.type,
+    this.admins = const [],
   });
 
   Map<String, dynamic> toMap() {
@@ -22,10 +24,12 @@ class GroupModel {
       'members': members,
       'memberLimits': memberLimits,
       'type': type,
+      'admins': admins.isEmpty ? [adminId] : admins,
     };
   }
 
   factory GroupModel.fromMap(Map<String, dynamic> map, String id) {
+    final adminsList = List<String>.from(map['admins'] ?? []);
     return GroupModel(
       id: id,
       name: map['name'] ?? '',
@@ -37,6 +41,9 @@ class GroupModel {
         ),
       ),
       type: map['type'] ?? 'split',
+      admins: adminsList.isEmpty && map['adminId'] != null
+          ? [map['adminId'] as String]
+          : adminsList,
     );
   }
 }

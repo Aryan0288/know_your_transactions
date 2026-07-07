@@ -16,7 +16,16 @@ class TransactionDetailDialog extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isExpense = transaction.isExpense;
+    bool isExpense = transaction.isExpense;
+    // Override for wages group recipients
+    if (transaction.groupId != null) {
+      final groups = ref.watch(userGroupsStreamProvider).value ?? [];
+      final targetGroup = groups.where((g) => g.id == transaction.groupId).firstOrNull;
+      if (targetGroup != null && targetGroup.toMap()['type'] == 'wages' &&
+          transaction.splitWith != null && transaction.splitWith!.contains(ref.watch(firebaseAuthProvider).currentUser?.uid)) {
+        isExpense = false;
+      }
+    }
     final typeColor = isExpense ? Colors.redAccent : Colors.green;
     final currentUserId = ref.watch(firebaseAuthProvider).currentUser?.uid;
 
@@ -199,6 +208,32 @@ class TransactionDetailDialog extends ConsumerWidget {
                                   ),
                                   onPressed: () async {
                                     final scaffoldMessenger = ScaffoldMessenger.of(context);
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                        title: Text('Delete Transaction ⚠️', style: GoogleFonts.manrope(fontWeight: FontWeight.bold)),
+                                        content: Text(
+                                          'Are you sure you want to delete this transaction? This action cannot be undone.',
+                                          style: GoogleFonts.manrope(fontSize: 14),
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(ctx, false),
+                                            child: Text('Cancel', style: GoogleFonts.manrope(color: Colors.grey[600], fontWeight: FontWeight.bold)),
+                                          ),
+                                          ElevatedButton(
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.red,
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                            ),
+                                            onPressed: () => Navigator.pop(ctx, true),
+                                            child: Text('Delete', style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.bold)),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (confirm != true) return;
                                     Navigator.pop(context);
                                     final success = await ref
                                         .read(transactionViewModelProvider.notifier)

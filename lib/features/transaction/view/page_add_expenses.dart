@@ -13,7 +13,19 @@ import 'package:know_your_expenses/features/helper/ad_helper.dart';
 class AddExpensePage extends ConsumerStatefulWidget {
   final double? initialAmount;
   final TransactionModel? editTransaction;
-  const AddExpensePage({super.key, this.initialAmount, this.editTransaction});
+  final String? initialGroupId;
+  final String? initialRecipientId;
+  final String? initialDescription;
+  final String? initialPaymentMode;
+  const AddExpensePage({
+    super.key,
+    this.initialAmount,
+    this.editTransaction,
+    this.initialGroupId,
+    this.initialRecipientId,
+    this.initialDescription,
+    this.initialPaymentMode,
+  });
 
   @override
   ConsumerState<AddExpensePage> createState() => _AddExpensePageState();
@@ -33,10 +45,12 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
   late final ValueNotifier<bool> isExpenseNotifier;
   final Map<String, TextEditingController> _memberSplitControllers = {};
   String? _lastInitializedGroupId;
+  late String _paymentMode;
 
   @override
   void initState() {
     super.initState();
+    _paymentMode = widget.initialPaymentMode ?? (widget.editTransaction?.paymentMode ?? 'cash');
     selectedCategoryNotifier = ValueNotifier<CategoryModel?>(
       widget.editTransaction != null
           ? CategoryModel(
@@ -48,14 +62,18 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
           : null,
     );
     selectedDateNotifier = ValueNotifier<DateTime>(widget.editTransaction?.date ?? DateTime.now());
-    isSharedNotifier = ValueNotifier<bool>(widget.editTransaction?.isShared ?? false);
-    selectedSplitMembersNotifier = ValueNotifier<List<String>>(widget.editTransaction?.splitWith ?? []);
+    isSharedNotifier = ValueNotifier<bool>(
+      widget.editTransaction?.isShared ?? (widget.initialGroupId != null && widget.initialGroupId != 'personal'),
+    );
+    selectedSplitMembersNotifier = ValueNotifier<List<String>>(
+      widget.editTransaction?.splitWith ?? (widget.initialRecipientId != null ? [widget.initialRecipientId!] : []),
+    );
     selectedGroupIdNotifier = ValueNotifier<String?>(
       widget.editTransaction != null
           ? (widget.editTransaction!.isShared
               ? widget.editTransaction!.groupId
               : 'personal')
-          : null,
+          : (widget.initialGroupId ?? null),
     );
     isCustomSplitNotifier = ValueNotifier<bool>(widget.editTransaction?.splitAmounts != null);
     splitAmountsNotifier = ValueNotifier<Map<String, double>>(widget.editTransaction?.splitAmounts ?? {});
@@ -73,12 +91,20 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
           );
         });
       }
-    } else if (widget.initialAmount != null && widget.initialAmount! > 0) {
-      amountController.text = widget.initialAmount!.toStringAsFixed(0);
+    } else {
+      if (widget.initialAmount != null && widget.initialAmount! > 0) {
+        amountController.text = widget.initialAmount!.toStringAsFixed(0);
+      }
+      if (widget.initialDescription != null) {
+        descriptionController.text = widget.initialDescription!;
+      }
     }
 
     amountController.addListener(_updateSplitAmounts);
     selectedSplitMembersNotifier.addListener(_updateSplitAmounts);
+    selectedGroupIdNotifier.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -209,6 +235,29 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
 
   @override
   Widget build(BuildContext context) {
+    final userGroupsAsync = ref.watch(userGroupsStreamProvider);
+    final groups = userGroupsAsync.value ?? [];
+    final selectedGroupId = selectedGroupIdNotifier.value;
+    final selectedGroup = (isSharedNotifier.value && selectedGroupId != null && selectedGroupId != 'personal')
+        ? groups.firstWhere((g) => g.id == selectedGroupId, orElse: () => groups.first)
+        : null;
+    final isWages = selectedGroup?.type == 'wages';
+
+    if (isWages) {
+      final wagesCat = CategoryModel(
+        id: 'cat_wages',
+        name: 'Wages',
+        iconCodePoint: Icons.payments.codePoint,
+        colorValue: Colors.indigo.value,
+      );
+      if (selectedCategoryNotifier.value?.id != 'cat_wages') {
+        Future.microtask(() {
+          selectedCategoryNotifier.value = wagesCat;
+          isExpenseNotifier.value = true;
+        });
+      }
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FE),
       appBar: AppBar(
@@ -289,182 +338,341 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Transaction Type Selector
-                  Text(
-                    'Transaction Type',
-                    style: GoogleFonts.manrope(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF1E1E1E),
+                  if (!isWages) ...[
+                    Text(
+                      'Transaction Type',
+                      style: GoogleFonts.manrope(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF1E1E1E),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  ValueListenableBuilder<bool>(
-                    valueListenable: isExpenseNotifier,
-                    builder: (context, isExpense, _) {
-                      return Row(
-                        children: [
-                          Expanded(
-                            child: InkWell(
-                              onTap: () {
-                                isExpenseNotifier.value = true;
-                              },
-                              borderRadius: BorderRadius.circular(16),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                decoration: BoxDecoration(
-                                  color: isExpense ? const Color(0xFFFFEBEE) : Colors.white,
-                                  border: Border.all(
-                                    color: isExpense ? Colors.redAccent : Colors.grey[300]!,
-                                    width: 1.5,
+                    const SizedBox(height: 12),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: isExpenseNotifier,
+                      builder: (context, isExpense, _) {
+                        return Row(
+                          children: [
+                            Expanded(
+                              child: InkWell(
+                                onTap: () {
+                                  isExpenseNotifier.value = true;
+                                },
+                                borderRadius: BorderRadius.circular(16),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: isExpense ? const Color(0xFFFFEBEE) : Colors.white,
+                                    border: Border.all(
+                                      color: isExpense ? Colors.redAccent : Colors.grey[300]!,
+                                      width: 1.5,
+                                    ),
+                                    borderRadius: BorderRadius.circular(16),
                                   ),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Center(
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.arrow_upward_rounded,
-                                        color: isExpense ? Colors.redAccent : Colors.grey[600],
-                                        size: 18,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'Expense',
-                                        style: GoogleFonts.manrope(
-                                          fontWeight: FontWeight.bold,
-                                          color: isExpense ? Colors.red[800] : Colors.grey[700],
+                                  child: Center(
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.arrow_upward_rounded,
+                                          color: isExpense ? Colors.redAccent : Colors.grey[600],
+                                          size: 18,
                                         ),
-                                      ),
-                                    ],
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Expense',
+                                          style: GoogleFonts.manrope(
+                                            fontWeight: FontWeight.bold,
+                                            color: isExpense ? Colors.red[800] : Colors.grey[700],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: InkWell(
+                                onTap: () {
+                                  isExpenseNotifier.value = false;
+                                },
+                                borderRadius: BorderRadius.circular(16),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: !isExpense ? const Color(0xFFE8F5E9) : Colors.white,
+                                    border: Border.all(
+                                      color: !isExpense ? Colors.green : Colors.grey[300]!,
+                                      width: 1.5,
+                                    ),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Center(
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.arrow_downward_rounded,
+                                          color: !isExpense ? Colors.green : Colors.grey[600],
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Income',
+                                          style: GoogleFonts.manrope(
+                                            fontWeight: FontWeight.bold,
+                                            color: !isExpense ? Colors.green[800] : Colors.grey[700],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // Category Selector Header
+                  if (!isWages) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Category',
+                          style: GoogleFonts.manrope(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF1E1E1E),
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: _showAddCategoryDialog,
+                          icon: const Icon(
+                            Icons.add_circle_outline,
+                            size: 20,
+                            color: Color(0xFF2E8B57),
+                          ),
+                          label: Text(
+                            'Add New',
+                            style: GoogleFonts.manrope(
+                              color: const Color(0xFF2E8B57),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Horizontal Category Scroll or Wages Card
+                  if (isWages) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.indigo.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.indigo.withOpacity(0.3), width: 1.5),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.indigo,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.payments, color: Colors.white, size: 24),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
-                            child: InkWell(
-                              onTap: () {
-                                isExpenseNotifier.value = false;
-                              },
-                              borderRadius: BorderRadius.circular(16),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                decoration: BoxDecoration(
-                                  color: !isExpense ? const Color(0xFFE8F5E9) : Colors.white,
-                                  border: Border.all(
-                                    color: !isExpense ? Colors.green : Colors.grey[300]!,
-                                    width: 1.5,
-                                  ),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Center(
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.arrow_downward_rounded,
-                                        color: !isExpense ? Colors.green : Colors.grey[600],
-                                        size: 18,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'Income',
-                                        style: GoogleFonts.manrope(
-                                          fontWeight: FontWeight.bold,
-                                          color: !isExpense ? Colors.green[800] : Colors.grey[700],
-                                        ),
-                                      ),
-                                    ],
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Wages / Salary',
+                                  style: GoogleFonts.manrope(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    color: Colors.indigo[900],
                                   ),
                                 ),
-                              ),
+                                Text(
+                                  'Standard category for employee salary credit',
+                                  style: GoogleFonts.manrope(
+                                    fontSize: 12,
+                                    color: Colors.indigo[700],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Category Selector Header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Category',
-                        style: GoogleFonts.manrope(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF1E1E1E),
-                        ),
                       ),
-                      TextButton.icon(
-                        onPressed: _showAddCategoryDialog,
-                        icon: const Icon(
-                          Icons.add_circle_outline,
-                          size: 20,
-                          color: Color(0xFF2E8B57),
-                        ),
-                        label: Text(
-                          'Add New',
-                          style: GoogleFonts.manrope(
-                            color: const Color(0xFF2E8B57),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Payment Mode Selector (Cash / Online)
+                    Text(
+                      'Payment Mode',
+                      style: GoogleFonts.manrope(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF1E1E1E),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Horizontal Category Scroll
-                  ValueListenableBuilder<bool>(
-                    valueListenable: isExpenseNotifier,
-                    builder: (context, isExpense, _) {
-                      if (!isExpense) {
-                        final incomeCategories = [
-                          CategoryModel(
-                            id: 'cash',
-                            name: 'Cash',
-                            iconCodePoint: Icons.money_rounded.codePoint,
-                            colorValue: Colors.green.value,
-                          ),
-                          CategoryModel(
-                            id: 'online',
-                            name: 'Online',
-                            iconCodePoint: Icons.payment_rounded.codePoint,
-                            colorValue: Colors.teal.value,
-                          ),
-                        ];
-                        final currentCat = selectedCategoryNotifier.value;
-                        if (currentCat == null || (currentCat.id != 'cash' && currentCat.id != 'online')) {
-                          Future.microtask(() => selectedCategoryNotifier.value = incomeCategories.first);
-                        }
-                        return _buildCategoryListWidget(incomeCategories);
-                      }
-
-                      return Consumer(
-                        builder: (context, ref, child) {
-                          final categoriesAsync = ref.watch(categoriesProvider);
-                          return categoriesAsync.when(
-                            data: (categories) {
-                              final currentCat = selectedCategoryNotifier.value;
-                              if (currentCat == null || currentCat.id == 'cash' || currentCat.id == 'online') {
-                                if (categories.isNotEmpty) {
-                                  Future.microtask(() => selectedCategoryNotifier.value = categories.first);
-                                }
-                              }
-                              return _buildCategoryListWidget(categories);
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () {
+                              setState(() => _paymentMode = 'cash');
                             },
-                            loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF2E8B57))),
-                            error: (e, stack) => Text('Error: $e'),
-                          );
-                        },
-                      );
-                    },
-                  ),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: _paymentMode == 'cash'
+                                    ? Colors.amber.withOpacity(0.12)
+                                    : Colors.white,
+                                border: Border.all(
+                                  color: _paymentMode == 'cash'
+                                      ? Colors.amber[700]!
+                                      : Colors.grey[300]!,
+                                  width: 1.5,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.money_rounded,
+                                    color: _paymentMode == 'cash'
+                                        ? Colors.amber[800]
+                                        : Colors.grey[600],
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Cash',
+                                    style: GoogleFonts.manrope(
+                                      fontWeight: FontWeight.bold,
+                                      color: _paymentMode == 'cash'
+                                          ? Colors.amber[900]
+                                          : Colors.grey[700],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () {
+                              setState(() => _paymentMode = 'online');
+                            },
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: _paymentMode == 'online'
+                                    ? Colors.blue.withOpacity(0.1)
+                                    : Colors.white,
+                                border: Border.all(
+                                  color: _paymentMode == 'online'
+                                      ? Colors.blue
+                                      : Colors.grey[300]!,
+                                  width: 1.5,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.payment_rounded,
+                                    color: _paymentMode == 'online'
+                                        ? Colors.blue
+                                        : Colors.grey[600],
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Online',
+                                    style: GoogleFonts.manrope(
+                                      fontWeight: FontWeight.bold,
+                                      color: _paymentMode == 'online'
+                                          ? Colors.blue[800]
+                                          : Colors.grey[700],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                  ] else ...[
+                    ValueListenableBuilder<bool>(
+                      valueListenable: isExpenseNotifier,
+                      builder: (context, isExpense, _) {
+                        if (!isExpense) {
+                          final incomeCategories = [
+                            CategoryModel(
+                              id: 'cash',
+                              name: 'Cash',
+                              iconCodePoint: Icons.money_rounded.codePoint,
+                              colorValue: Colors.green.value,
+                            ),
+                            CategoryModel(
+                              id: 'online',
+                              name: 'Online',
+                              iconCodePoint: Icons.payment_rounded.codePoint,
+                              colorValue: Colors.teal.value,
+                            ),
+                          ];
+                          final currentCat = selectedCategoryNotifier.value;
+                          if (currentCat == null || (currentCat.id != 'cash' && currentCat.id != 'online')) {
+                            Future.microtask(() => selectedCategoryNotifier.value = incomeCategories.first);
+                          }
+                          return _buildCategoryListWidget(incomeCategories);
+                        }
+
+                        return Consumer(
+                          builder: (context, ref, child) {
+                            final categoriesAsync = ref.watch(categoriesProvider);
+                            return categoriesAsync.when(
+                              data: (categories) {
+                                final currentCat = selectedCategoryNotifier.value;
+                                if (currentCat == null || currentCat.id == 'cash' || currentCat.id == 'online') {
+                                  if (categories.isNotEmpty) {
+                                    Future.microtask(() => selectedCategoryNotifier.value = categories.first);
+                                  }
+                                }
+                                return _buildCategoryListWidget(categories);
+                              },
+                              loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF2E8B57))),
+                              error: (e, stack) => Text('Error: $e'),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ],
 
                   const SizedBox(height: 32),
 
@@ -621,6 +829,7 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                                     )
                                   : null;
                               final isBusinessGroup = selectedGroup?.type == 'business';
+                              final isWagesGroup = selectedGroup?.type == 'wages';
 
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -690,7 +899,114 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                                       ),
                                     ),
                                   ),
-                                  if (isShared && selectedGroupId != null && !isBusinessGroup) ...[
+                                  if (isShared && selectedGroupId != null && isWagesGroup) ...[
+                                    const SizedBox(height: 24),
+                                    Text(
+                                      'Employee Name (Recipient)',
+                                      style: GoogleFonts.manrope(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey[700],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    ref.watch(groupMembersDetailsByIdProvider(selectedGroupId)).when(
+                                      data: (members) {
+                                        final employees = members;
+                                        final disambiguatedNames = Utils.getDisambiguatedNames(employees);
+
+                                        if (employees.isEmpty) {
+                                          return Container(
+                                            padding: const EdgeInsets.all(16),
+                                            decoration: BoxDecoration(
+                                              color: Colors.amber.shade50,
+                                              borderRadius: BorderRadius.circular(16),
+                                              border: Border.all(color: Colors.amber.shade200),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.warning_amber_rounded, color: Colors.amber.shade800),
+                                                const SizedBox(width: 12),
+                                                Expanded(
+                                                  child: Text(
+                                                    'No employees added to this wages group yet. Add employees first in Settings.',
+                                                    style: GoogleFonts.manrope(
+                                                      color: Colors.amber.shade900,
+                                                      fontSize: 13,
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }
+
+                                        final currentSelection = selectedSplitMembersNotifier.value;
+                                        if (currentSelection.isEmpty || !employees.any((m) => m['uid'] == currentSelection.first)) {
+                                          final firstEmp = employees.first;
+                                          Future.microtask(() {
+                                            selectedSplitMembersNotifier.value = [firstEmp['uid'] as String];
+                                          });
+                                        }
+
+                                        final selectedRecipient = selectedSplitMembersNotifier.value.isNotEmpty
+                                            ? selectedSplitMembersNotifier.value.first
+                                            : '';
+
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(16),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(0.05),
+                                                blurRadius: 10,
+                                                offset: const Offset(0, 4),
+                                              ),
+                                            ],
+                                          ),
+                                          child: DropdownButtonHideUnderline(
+                                            child: DropdownButton<String>(
+                                              value: selectedRecipient.isNotEmpty ? selectedRecipient : null,
+                                              isExpanded: true,
+                                              hint: Text(
+                                                'Select Employee',
+                                                style: GoogleFonts.manrope(
+                                                  color: Colors.grey[500],
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                              icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF2E8B57)),
+                                              style: GoogleFonts.manrope(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.black87,
+                                              ),
+                                              items: employees.map((m) {
+                                                final uid = m['uid'] as String;
+                                                final name = disambiguatedNames[uid] ?? (m['name'] as String? ?? 'Employee');
+                                                return DropdownMenuItem<String>(
+                                                  value: uid,
+                                                  child: Text(name, style: GoogleFonts.manrope(fontWeight: FontWeight.w600)),
+                                                );
+                                              }).toList(),
+                                              onChanged: (newRecipient) {
+                                                if (newRecipient != null) {
+                                                  selectedSplitMembersNotifier.value = [newRecipient];
+                                                }
+                                              },
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF2E8B57))),
+                                      error: (err, stack) => Text('Error loading staff: $err'),
+                                    ),
+                                  ],
+                                  if (isShared && selectedGroupId != null && !isBusinessGroup && !isWagesGroup) ...[
                                     const SizedBox(height: 24),
                                     Row(
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -732,6 +1048,7 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                                     const SizedBox(height: 12),
                                     ref.watch(groupMembersDetailsByIdProvider(selectedGroupId)).when(
                                       data: (members) {
+                                        final disambiguatedNames = Utils.getDisambiguatedNames(members);
                                         for (var m in members) {
                                           final uid = m['uid'] as String;
                                           if (!_memberSplitControllers.containsKey(uid)) {
@@ -769,9 +1086,10 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                                             itemBuilder: (context, index) {
                                               final member = members[index];
                                               final uid = member['uid'] as String;
+                                              final baseName = disambiguatedNames[uid] ?? (member['name'] as String? ?? 'Group Member');
                                               final name = uid == currentUserId
-                                                  ? '${member['name'] as String? ?? 'Group Member'} (You)'
-                                                  : (member['name'] as String? ?? 'Group Member');
+                                                  ? '$baseName (You)'
+                                                  : baseName;
                                               final isSelected = selectedSplitMembers.contains(uid);
 
                                               return Padding(
@@ -966,14 +1284,15 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
 
                       final userGroups = ref.read(userGroupsStreamProvider).value ?? [];
                       final selectedGroup = shared && targetGroupId != null
-                          ? userGroups.firstWhere(
+                                          ? userGroups.firstWhere(
                               (g) => g.id == targetGroupId,
                               orElse: () => userGroups.first,
                             )
                           : null;
                       final isBusinessGroup = selectedGroup?.type == 'business';
+                      final isWagesGroup = selectedGroup?.type == 'wages';
 
-                      if (shared && !isBusinessGroup) {
+                      if (shared && !isBusinessGroup && !isWagesGroup) {
                         if (splitWith.isEmpty) {
                           Utils.showErrorToast(
                             context,
@@ -997,7 +1316,7 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                       }
 
                       Map<String, double>? splitAmounts;
-                      if (shared && !isBusinessGroup) {
+                      if (shared && !isBusinessGroup && !isWagesGroup) {
                         splitAmounts = {};
                         for (var uid in splitWith) {
                           final controller = _memberSplitControllers[uid];
@@ -1005,6 +1324,10 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                             splitAmounts[uid] = double.tryParse(controller.text) ?? 0.0;
                           }
                         }
+                      } else if (shared && isWagesGroup) {
+                        splitAmounts = {
+                          if (splitWith.isNotEmpty) splitWith.first: double.tryParse(amountController.text) ?? 0.0
+                        };
                       }
 
                       final isEdit = widget.editTransaction != null;
@@ -1160,6 +1483,74 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                         }
                       }
 
+                      // If saving in a wages group, show custom confirmation
+                      if (isWagesGroup) {
+                        final currentUserId = ref.read(firebaseAuthProvider).currentUser?.uid;
+                        final isAdmin = selectedGroup?.adminId == currentUserId || (selectedGroup?.admins?.contains(currentUserId) ?? false);
+                        if (!isAdmin) {
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              title: Text(
+                                'Action Restricted ⚠️',
+                                style: GoogleFonts.manrope(fontWeight: FontWeight.bold),
+                              ),
+                              content: Text(
+                                'Only the group Admin is authorized to record wages payments in this group.',
+                                style: GoogleFonts.manrope(fontSize: 14),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: Text('OK', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, color: const Color(0xFF2E8B57))),
+                                ),
+                              ],
+                            ),
+                          );
+                          return;
+                        }
+
+                        String employeeName = 'Selected Employee';
+                        final membersList = ref.read(groupMembersDetailsByIdProvider(targetGroupId!)).value;
+                        if (membersList != null && splitWith.isNotEmpty) {
+                          final disambiguatedNames = Utils.getDisambiguatedNames(membersList);
+                          employeeName = disambiguatedNames[splitWith.first] ?? 'Employee';
+                        }
+
+                        final proceed = await showDialog<bool>(
+                          context: context,
+                          builder: (context) {
+                            return AlertDialog(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              title: Text(
+                                'Confirm Wages Payment 💼',
+                                style: GoogleFonts.manrope(fontWeight: FontWeight.bold),
+                              ),
+                              content: Text(
+                                'Are you sure you want to record a wages payment of ₹${(double.tryParse(amountController.text) ?? 0.0).toStringAsFixed(2)} to $employeeName via ${_paymentMode.toUpperCase()}?',
+                                style: GoogleFonts.manrope(fontSize: 14),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: Text('Cancel', style: GoogleFonts.manrope(color: Colors.grey[600], fontWeight: FontWeight.bold)),
+                                ),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF2E8B57),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: Text('Confirm', style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                        if (proceed != true) return;
+                      }
+
                       final success = isEdit
                           ? await ref
                               .read(transactionViewModelProvider.notifier)
@@ -1171,9 +1562,10 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                                 date: selectedDateNotifier.value,
                                 isExpense: isExpenseNotifier.value,
                                 isShared: shared,
-                                splitWith: (shared && !isBusinessGroup) ? splitWith : null,
+                                splitWith: (shared && (!isBusinessGroup || isWagesGroup)) ? splitWith : null,
                                 targetGroupId: targetGroupId,
                                 splitAmounts: splitAmounts,
+                                paymentMode: isWagesGroup ? _paymentMode : null,
                               )
                           : await ref
                               .read(transactionViewModelProvider.notifier)
@@ -1184,9 +1576,10 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                                 date: selectedDateNotifier.value,
                                 isExpense: isExpenseNotifier.value,
                                 isShared: shared,
-                                splitWith: (shared && !isBusinessGroup) ? splitWith : null,
+                                splitWith: (shared && (!isBusinessGroup || isWagesGroup)) ? splitWith : null,
                                 targetGroupId: targetGroupId,
                                 splitAmounts: splitAmounts,
+                                paymentMode: isWagesGroup ? _paymentMode : null,
                               );
 
                       if (success && mounted) {

@@ -426,17 +426,21 @@ class _GroupSettingsPageState extends ConsumerState<GroupSettingsPage> {
                     groupAsync.when(
                       data: (group) {
                         if (group == null) return const SizedBox();
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildGroupHeaderCard(group),
-                            const SizedBox(height: 28),
-                            _buildMembersSection(group, groupMembersAsync),
-                            const SizedBox(height: 28),
-                            if (group.adminId == ref.read(firebaseAuthProvider).currentUser?.uid)
-                              _buildInviteSection(),
-                          ],
-                        );
+                            final currentUserId = ref.read(firebaseAuthProvider).currentUser?.uid;
+                            final groupAdmins = List<String>.from(group.toMap()['admins'] ?? []);
+                            final isUserAdmin = groupAdmins.contains(currentUserId) || group.adminId == currentUserId;
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildGroupHeaderCard(group),
+                                const SizedBox(height: 28),
+                                _buildMembersSection(group, groupMembersAsync),
+                                if (isUserAdmin) ...[
+                                  const SizedBox(height: 28),
+                                  _buildInviteSection(),
+                                ],
+                              ],
+                            );
                       },
                       loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF2E8B57))),
                       error: (err, stack) => Text('Error loading group: $err'),
@@ -511,10 +515,23 @@ class _GroupSettingsPageState extends ConsumerState<GroupSettingsPage> {
                     error: (e, s) => const SizedBox.shrink(),
                   ),
 
-                  if (userGroupId != null) ...[
-                    const SizedBox(height: 40),
-                    _buildDangerZone(),
-                  ],
+                  groupAsync.when(
+                    data: (group) {
+                      if (group == null) return const SizedBox.shrink();
+                      final currentUserId = ref.read(firebaseAuthProvider).currentUser?.uid;
+                      final groupAdmins = List<String>.from(group.toMap()['admins'] ?? []);
+                      final isUserAdmin = groupAdmins.contains(currentUserId) || group.adminId == currentUserId;
+                      if (isUserAdmin) {
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 40.0),
+                          child: _buildDangerZone(),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
+                    loading: () => const SizedBox.shrink(),
+                    error: (e, s) => const SizedBox.shrink(),
+                  ),
                   const SizedBox(height: 40),
                 ],
               ),
@@ -574,67 +591,242 @@ class _GroupSettingsPageState extends ConsumerState<GroupSettingsPage> {
           style: GoogleFonts.manrope(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFF1E232A)),
         ),
         const SizedBox(height: 12),
-        membersAsync.when(
-          data: (members) {
-            return Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: members.length,
-                separatorBuilder: (context, index) => const Divider(height: 1, indent: 20, endIndent: 20),
-                itemBuilder: (context, index) {
-                  final member = members[index];
-                  final uid = member['uid'] as String;
-                  final name = member['name'] as String? ?? 'Group Member';
-                  final email = member['email'] as String? ?? '';
-                  final isAdmin = group.adminId == uid;
-                  final isMe = currentUserId == uid;
-                  return Material(
-                    color: Colors.transparent,
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                      title: Row(
-                        children: [
-                          Text(
-                            isMe ? '$name (You)' : name,
-                            style: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 16),
+        Consumer(
+          builder: (context, ref, child) {
+            final invitesAsync = ref.watch(groupSentPendingInvitationsProvider(group.id));
+
+            return membersAsync.when(
+              data: (members) {
+                return invitesAsync.when(
+                  data: (invites) {
+                    final totalCount = members.length + invites.length;
+
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
                           ),
-                          if (isAdmin) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFE6F3F2),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                'Admin',
-                                style: GoogleFonts.manrope(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF2E7D79)),
-                              ),
-                            ),
-                          ],
                         ],
                       ),
-                      subtitle: Text(email, style: GoogleFonts.manrope(fontSize: 13, color: Colors.grey[600])),
-                    ),
-                  );
-                },
-              ),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: totalCount,
+                        separatorBuilder: (context, index) => const Divider(height: 1, indent: 20, endIndent: 20),
+                        itemBuilder: (context, index) {
+                          if (index < members.length) {
+                            final member = members[index];
+                            final uid = member['uid'] as String;
+                            final name = member['name'] as String? ?? 'Group Member';
+                            final email = member['email'] as String? ?? '';
+                            final groupAdmins = List<String>.from(group.toMap()['admins'] ?? []);
+                            final isAdmin = groupAdmins.contains(uid) || group.adminId == uid;
+                            final isMe = currentUserId == uid;
+
+                            return Material(
+                              color: Colors.transparent,
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                                title: Row(
+                                  children: [
+                                    Text(
+                                      isMe ? '$name (You)' : name,
+                                      style: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 16),
+                                    ),
+                                    if (isAdmin) ...[
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFE6F3F2),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          'Admin',
+                                          style: GoogleFonts.manrope(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF2E7D79)),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                subtitle: Text(email, style: GoogleFonts.manrope(fontSize: 13, color: Colors.grey[600])),
+                                trailing: (groupAdmins.contains(currentUserId) || group.adminId == currentUserId) && !isMe
+                                    ? PopupMenuButton<String>(
+                                        icon: const Icon(Icons.more_vert),
+                                        onSelected: (value) async {
+                                          if (value == 'promote') {
+                                            final success = await ref
+                                                .read(groupControllerProvider.notifier)
+                                                .promoteToAdmin(uid);
+                                            if (success && context.mounted) {
+                                              Utils.showSuccessToast(context, title: "Promoted to Admin!");
+                                            }
+                                          } else if (value == 'demote') {
+                                            if (uid == group.adminId) {
+                                              Utils.showErrorToast(context,
+                                                  title: "Action Not Allowed",
+                                                  description: "Cannot demote the primary group creator.");
+                                              return;
+                                            }
+                                            final success = await ref
+                                                .read(groupControllerProvider.notifier)
+                                                .demoteFromAdmin(uid);
+                                            if (success && context.mounted) {
+                                              Utils.showSuccessToast(context, title: "Demoted to Member!");
+                                            }
+                                          } else if (value == 'remove_member') {
+                                            final confirm = await showDialog<bool>(
+                                              context: context,
+                                              builder: (context) => AlertDialog(
+                                                title: Text('Remove Member', style: GoogleFonts.manrope(fontWeight: FontWeight.bold)),
+                                                content: Text('Are you sure you want to remove $name from the group?', style: GoogleFonts.manrope()),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(context, false),
+                                                    child: Text('Cancel', style: GoogleFonts.manrope(color: Colors.grey)),
+                                                  ),
+                                                  ElevatedButton(
+                                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                                    onPressed: () => Navigator.pop(context, true),
+                                                    child: Text('Remove', style: GoogleFonts.manrope(color: Colors.white)),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                            if (confirm == true && context.mounted) {
+                                              final success = await ref
+                                                  .read(groupControllerProvider.notifier)
+                                                  .removeMemberFromGroup(uid);
+                                              if (success && context.mounted) {
+                                                Utils.showSuccessToast(context, title: "Member Removed");
+                                              }
+                                            }
+                                          }
+                                        },
+                                        itemBuilder: (context) => [
+                                          if (!groupAdmins.contains(uid) && uid != group.adminId) ...[
+                                            const PopupMenuItem(
+                                              value: 'promote',
+                                              child: Text('Make Admin'),
+                                            ),
+                                            const PopupMenuItem(
+                                              value: 'remove_member',
+                                              child: Text('Remove from Group', style: TextStyle(color: Colors.red)),
+                                            ),
+                                          ] else if (uid != group.adminId) ...[
+                                            const PopupMenuItem(
+                                              value: 'demote',
+                                              child: Text('Remove Admin Role'),
+                                            ),
+                                            const PopupMenuItem(
+                                              value: 'remove_member',
+                                              child: Text('Remove from Group', style: TextStyle(color: Colors.red)),
+                                            ),
+                                          ]
+                                        ],
+                                      )
+                                    : null,
+                              ),
+                            );
+                          } else {
+                            final inviteIndex = index - members.length;
+                            final invite = invites[inviteIndex];
+                            final inviteId = invite['id'] as String;
+                            final toEmail = invite['toEmail'] as String? ?? '';
+                            final groupAdmins = List<String>.from(group.toMap()['admins'] ?? []);
+                            final isCurrentUserAdmin = groupAdmins.contains(currentUserId) || group.adminId == currentUserId;
+
+                            return Material(
+                              color: Colors.transparent,
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                                title: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        toEmail,
+                                        style: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.grey[700]),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.amber.shade50,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.amber.shade200),
+                                      ),
+                                      child: Text(
+                                        'Pending',
+                                        style: GoogleFonts.manrope(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.amber.shade800),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                subtitle: Text('Invitation sent', style: GoogleFonts.manrope(fontSize: 13, color: Colors.grey[500])),
+                                trailing: isCurrentUserAdmin
+                                    ? PopupMenuButton<String>(
+                                        icon: const Icon(Icons.more_vert),
+                                        onSelected: (value) async {
+                                          if (value == 'revoke') {
+                                            final confirm = await showDialog<bool>(
+                                              context: context,
+                                              builder: (context) => AlertDialog(
+                                                title: Text('Revoke Invitation', style: GoogleFonts.manrope(fontWeight: FontWeight.bold)),
+                                                content: Text('Are you sure you want to revoke invitation for $toEmail?', style: GoogleFonts.manrope()),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(context, false),
+                                                    child: Text('Cancel', style: GoogleFonts.manrope(color: Colors.grey)),
+                                                  ),
+                                                  ElevatedButton(
+                                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                                    onPressed: () => Navigator.pop(context, true),
+                                                    child: Text('Revoke', style: GoogleFonts.manrope(color: Colors.white)),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                            if (confirm == true && context.mounted) {
+                                              final success = await ref
+                                                  .read(groupControllerProvider.notifier)
+                                                  .cancelInvitation(inviteId);
+                                              if (success && context.mounted) {
+                                                Utils.showSuccessToast(context, title: "Invitation Revoked");
+                                              }
+                                            }
+                                          }
+                                        },
+                                        itemBuilder: (context) => [
+                                          const PopupMenuItem(
+                                            value: 'revoke',
+                                            child: Text('Revoke Invite', style: TextStyle(color: Colors.red)),
+                                          ),
+                                        ],
+                                      )
+                                    : null,
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    );
+                  },
+                  loading: () => const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: Color(0xFF2E8B57)))),
+                  error: (e, s) => Text('Error loading invites: $e'),
+                );
+              },
+              loading: () => const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: Color(0xFF2E8B57)))),
+              error: (e, s) => Text('Error: $e'),
             );
           },
-          loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF2E8B57))),
-          error: (err, stack) => Text('Error: $err'),
         ),
       ],
     );

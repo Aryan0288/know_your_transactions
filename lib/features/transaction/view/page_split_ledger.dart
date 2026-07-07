@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:know_your_expenses/features/home/model/group_model.dart';
+import 'package:toastification/toastification.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_home.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_group.dart';
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
@@ -11,13 +12,14 @@ import 'package:know_your_expenses/features/helper/utils.dart';
 import 'package:know_your_expenses/features/transaction/model/model_transaction.dart';
 import 'package:know_your_expenses/features/transaction/view/dialog_transaction_detail.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:know_your_expenses/features/transaction/view/widgets/widget_overall_balance_card.dart';
 import 'package:know_your_expenses/features/transaction/view/widgets/widget_group_ledger_card.dart';
 import 'package:know_your_expenses/features/common_widgets/closable_banner_ad.dart';
-import 'package:know_your_expenses/features/helper/pdf_helper.dart';
 import 'package:know_your_expenses/features/transaction/view/widgets/widget_export_bottom_sheet.dart';
+import 'package:know_your_expenses/features/transaction/view/page_add_expenses.dart';
 
 final selectedGroupFilterProvider = StateProvider<String?>((ref) => null);
+final selectedMemberIdProvider = StateProvider<String?>((ref) => null);
+final lastBackPressedProvider = StateProvider<DateTime?>((ref) => null);
 final groupsHubTabProvider = StateProvider<int>(
   (ref) => 0,
 ); // 0 = Expenses, 1 = Activity Log
@@ -132,7 +134,19 @@ class SplitLedgerPage extends ConsumerWidget {
                 children: [
                   IconButton(
                     onPressed: () {
-                      ref.read(bottomNavIndexProvider.notifier).state = 0;
+                      final selectedMemberId = ref.read(selectedMemberIdProvider);
+                      final selectedGroupId = ref.read(selectedGroupFilterProvider);
+                      if (selectedMemberId != null) {
+                        ref.read(selectedMemberIdProvider.notifier).state = null;
+                      } else if (selectedGroupId != null) {
+                        ref.read(selectedGroupFilterProvider.notifier).state = null;
+                      } else {
+                        if (Navigator.canPop(context)) {
+                          Navigator.pop(context);
+                        } else {
+                          ref.read(bottomNavIndexProvider.notifier).state = 0;
+                        }
+                      }
                     },
                     icon: const Icon(
                       Icons.arrow_back_ios_new_rounded,
@@ -268,15 +282,55 @@ class SplitLedgerPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final groupsAsync = ref.watch(userGroupsStreamProvider);
     final currentUserId = ref.watch(firebaseAuthProvider).currentUser?.uid;
-    final allTransactionsAsync = ref.watch(allGroupsTransactionsProvider);
     final memberNames = ref.watch(allGroupsMembersProvider).value ?? {};
     final selectedGroupId = ref.watch(selectedGroupFilterProvider);
+    final selectedMemberId = ref.watch(selectedMemberIdProvider);
     final currentTab = ref.watch(groupsHubTabProvider);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FE),
-      bottomNavigationBar: const ClosableBannerAd(),
-      body: currentUserId == null
+    return PopScope(
+      canPop: selectedGroupId == null && selectedMemberId == null && Navigator.canPop(context),
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+
+        final sGroupId = ref.read(selectedGroupFilterProvider);
+        final sMemberId = ref.read(selectedMemberIdProvider);
+
+        if (sMemberId != null) {
+          ref.read(selectedMemberIdProvider.notifier).state = null;
+        } else if (sGroupId != null) {
+          ref.read(selectedGroupFilterProvider.notifier).state = null;
+        } else {
+          final now = DateTime.now();
+          final lastPressed = ref.read(lastBackPressedProvider);
+          if (lastPressed == null || now.difference(lastPressed) > const Duration(seconds: 2)) {
+            ref.read(lastBackPressedProvider.notifier).state = now;
+            toastification.show(
+              context: context,
+              type: ToastificationType.info,
+              style: ToastificationStyle.fillColored,
+              backgroundColor: const Color(0xFF2E8B57),
+              autoCloseDuration: const Duration(seconds: 2),
+              alignment: Alignment.bottomCenter,
+              title: Text(
+                'Press back again to exit',
+                style: GoogleFonts.manrope(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: Colors.white,
+                ),
+              ),
+              showProgressBar: false,
+              closeButtonShowType: CloseButtonShowType.none,
+            );
+          } else {
+            await SystemChannels.platform.invokeMethod('SystemNavigator.pop');
+          }
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8F9FE),
+        bottomNavigationBar: const ClosableBannerAd(),
+        body: currentUserId == null
           ? _buildNoGroupView(
               context,
               "Sign In Required",
@@ -292,7 +346,26 @@ class SplitLedgerPage extends ConsumerWidget {
                   );
                 }
 
-                final groupNames = {for (var g in groups) g.id: g.name};
+                final selectedGroup = selectedGroupId != null
+                    ? groups.firstWhere((g) => g.id == selectedGroupId, orElse: () => groups.first)
+                    : null;
+                final isAdmin = selectedGroup?.adminId == currentUserId || (selectedGroup?.admins.contains(currentUserId) ?? false);
+                final isWages = selectedGroup?.type == 'wages';
+                final transactions = selectedGroupId != null
+                    ? ref.watch(groupTransactionsStreamByIdProvider(selectedGroupId)).value ?? []
+                    : [];
+                final balances = selectedGroupId != null
+                    ? ref.watch(groupSplitBalancesProvider(selectedGroupId))
+                    : <SplitBalance>[];
+
+                String tab0Text = 'Expenses';
+                if (selectedGroupId == null) {
+                  tab0Text = 'Spaces';
+                } else if (selectedMemberId == null) {
+                  tab0Text = isWages ? 'Employees' : 'Members';
+                } else {
+                  tab0Text = isWages ? 'Income' : 'Expenses';
+                }
 
                 // Filter groups for rendering
                 final filteredGroups = selectedGroupId == null
@@ -304,18 +377,256 @@ class SplitLedgerPage extends ConsumerWidget {
                   slivers: [
                     // Header
                     SliverToBoxAdapter(child: _buildHeader(context, ref)),
-                    // 1. Overall Balance Card
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                          24.0,
-                          16.0,
-                          24.0,
-                          16.0,
+
+                    if (selectedGroupId != null)
+                      SliverToBoxAdapter(
+                        child: Consumer(
+                          builder: (context, ref, child) {
+                            if (selectedMemberId == null) {
+                              if (isWages && !isAdmin) return const SizedBox();
+
+                              double groupWagesTotal = 0.0;
+                              double netBalance = 0.0;
+                              
+                              if (isWages) {
+                                final wagesTransactions = transactions.where((t) => t.isShared && t.categoryId == 'cat_wages');
+                                for (var t in wagesTransactions) {
+                                  groupWagesTotal += t.amount;
+                                }
+                              } else {
+                                for (var b in balances) {
+                                  if (b.debtorId == currentUserId) {
+                                    netBalance -= b.amount;
+                                  } else if (b.creditorId == currentUserId) {
+                                    netBalance += b.amount;
+                                  }
+                                }
+                              }
+
+                              final double displayAmount = isWages ? groupWagesTotal : netBalance;
+                              final String cardTitle = isWages 
+                                  ? 'Total Wages Paid' 
+                                  : (displayAmount > 0.01 
+                                      ? 'Owed to You' 
+                                      : (displayAmount < -0.01 ? 'You Owe' : 'Settled'));
+                              
+                              final List<Color> gradientColors = isWages
+                                  ? [const Color(0xFF2E7D79), const Color(0xFF429690)]
+                                  : (displayAmount > 0.01
+                                      ? [const Color(0xFF2E7D79), const Color(0xFF429690)]
+                                      : (displayAmount < -0.01
+                                          ? [const Color(0xFFB71C1C), const Color(0xFFE57373)]
+                                          : [const Color(0xFF616161), const Color(0xFF9E9E9E)]));
+
+                              final IconData cardIcon = isWages
+                                  ? Icons.payments_rounded
+                                  : (displayAmount > 0.01
+                                      ? Icons.arrow_downward_rounded
+                                      : (displayAmount < -0.01
+                                          ? Icons.arrow_upward_rounded
+                                          : Icons.check_circle_rounded));
+
+                              return Container(
+                                margin: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: gradientColors,
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(24),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: gradientColors[0].withOpacity(0.3),
+                                      blurRadius: 16,
+                                      offset: const Offset(0, 8),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.2),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        cardIcon,
+                                        color: Colors.white,
+                                        size: 26,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            cardTitle,
+                                            style: GoogleFonts.manrope(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                          Text(
+                                            isWages 
+                                                ? 'All paid wages to employees' 
+                                                : (displayAmount > 0.01 
+                                                    ? 'Net amount you are owed' 
+                                                    : (displayAmount < -0.01 ? 'Net amount you owe' : 'Group is fully settled')),
+                                            style: GoogleFonts.manrope(
+                                              fontSize: 11,
+                                              color: Colors.white70,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Text(
+                                      '₹${displayAmount.abs().toStringAsFixed(2)}',
+                                      style: GoogleFonts.manrope(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.w900,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            } else {
+                              final membersAsync = ref.watch(groupMembersDetailsByIdProvider(selectedGroupId));
+                              return membersAsync.when(
+                                data: (members) {
+                                  final member = members.firstWhere((m) => m['uid'] == selectedMemberId, orElse: () => {});
+                                  if (member.isEmpty) return const SizedBox();
+
+                                  final mUid = member['uid'] as String;
+                                  final disambiguatedNames = Utils.getDisambiguatedNames(members);
+                                  final baseName = disambiguatedNames[mUid] ?? (member['name'] as String? ?? 'Member');
+                                  final mName = mUid == currentUserId ? '$baseName (You)' : baseName;
+                                  final mPhoto = member['photoUrl'] as String?;
+
+                                  final isWagesGroup = selectedGroup?.type == 'wages';
+                                  final isBusinessGroup = selectedGroup?.type == 'business';
+
+                                  double displayAmount = 0.0;
+                                  String summaryTitle = '';
+                                  if (isWagesGroup) {
+                                    final mTransactions = transactions.where((t) => t.isShared && t.categoryId == 'cat_wages' && t.splitWith != null && t.splitWith!.contains(mUid));
+                                    for (var t in mTransactions) {
+                                      displayAmount += t.amount;
+                                    }
+                                    final isCurrentUserAdmin = selectedGroup?.adminId == currentUserId || (selectedGroup?.admins.contains(currentUserId) ?? false);
+                                    summaryTitle = isCurrentUserAdmin
+                                        ? 'Total Wages Paid'
+                                        : 'Total Wages Received';
+                                  } else if (isBusinessGroup) {
+                                    final mTransactions = transactions.where((t) => t.userId == mUid);
+                                    for (var t in mTransactions) {
+                                      displayAmount += t.amount;
+                                    }
+                                    summaryTitle = 'Total Spends';
+                                  } else {
+                                    double bal = 0.0;
+                                    for (var b in balances) {
+                                      if (b.debtorId == mUid && b.creditorId == currentUserId) {
+                                        bal += b.amount;
+                                      } else if (b.creditorId == mUid && b.debtorId == currentUserId) {
+                                        bal -= b.amount;
+                                      }
+                                    }
+                                    displayAmount = bal;
+                                    summaryTitle = bal > 0.01 ? 'Owes You' : (bal < -0.01 ? 'You Owe' : 'Net Balance');
+                                  }
+
+                                  final List<Color> gradientColors = isWagesGroup
+                                      ? [const Color(0xFF2E7D79), const Color(0xFF429690)]
+                                      : (displayAmount > 0.01
+                                          ? [const Color(0xFF2E7D79), const Color(0xFF429690)]
+                                          : (displayAmount < -0.01
+                                              ? [const Color(0xFFB71C1C), const Color(0xFFE57373)]
+                                              : [const Color(0xFF616161), const Color(0xFF9E9E9E)]));
+
+                                  return Container(
+                                    margin: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+                                    padding: const EdgeInsets.all(20),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: gradientColors,
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                      borderRadius: BorderRadius.circular(24),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: gradientColors[0].withOpacity(0.3),
+                                          blurRadius: 16,
+                                          offset: const Offset(0, 8),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 26,
+                                          backgroundColor: Colors.white.withOpacity(0.2),
+                                          backgroundImage: mPhoto != null ? NetworkImage(mPhoto) : null,
+                                          child: mPhoto == null
+                                              ? Text(
+                                                  mName[0].toUpperCase(),
+                                                  style: GoogleFonts.manrope(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 20,
+                                                    color: Colors.white,
+                                                  ),
+                                                )
+                                              : null,
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                mName,
+                                                style: GoogleFonts.manrope(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                              Text(
+                                                summaryTitle,
+                                                style: GoogleFonts.manrope(
+                                                  fontSize: 12,
+                                                  color: Colors.white70,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Text(
+                                          '₹${displayAmount.abs().toStringAsFixed(2)}',
+                                          style: GoogleFonts.manrope(
+                                            fontSize: 24,
+                                            fontWeight: FontWeight.w900,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                                loading: () => const SizedBox(),
+                                error: (_, __) => const SizedBox(),
+                              );
+                            }
+                          },
                         ),
-                        child: const OverallBalanceCard(),
                       ),
-                    ),
 
                     // 1.5 Tab Selector
                     SliverToBoxAdapter(
@@ -359,7 +670,7 @@ class SplitLedgerPage extends ConsumerWidget {
                                     ),
                                     child: Center(
                                       child: Text(
-                                        'Expenses',
+                                        tab0Text,
                                         style: GoogleFonts.manrope(
                                           fontWeight: FontWeight.bold,
                                           color: currentTab == 0
@@ -410,13 +721,13 @@ class SplitLedgerPage extends ConsumerWidget {
 
                     if (currentTab == 0) ...[
                       // ─── EXPENSES TAB ───
-                      // 2. Groups Section
-                      if (selectedGroupId != null) ...[
+                      if (selectedGroupId == null) ...[
+                        // 2. Groups Section
                         SliverToBoxAdapter(
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
                             child: Text(
-                              'Selected Group',
+                              'Your spaces',
                               style: GoogleFonts.manrope(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
@@ -434,393 +745,653 @@ class SplitLedgerPage extends ConsumerWidget {
                                 horizontal: 24,
                                 vertical: 6,
                               ),
-                              child: GroupLedgerCard(
-                                group: group,
-                                currentUserId: currentUserId,
-                                onSettle: (balance) =>
-                                    _onSettleUp(context, ref, balance, group.id),
+                              child: GestureDetector(
+                                onTap: () {
+                                  ref.read(selectedGroupFilterProvider.notifier).state = group.id;
+                                  ref.read(selectedMemberIdProvider.notifier).state = null;
+                                },
+                                child: GroupLedgerCard(
+                                  group: group,
+                                  currentUserId: currentUserId,
+                                  onSettle: (balance) =>
+                                      _onSettleUp(context, ref, balance, group.id),
+                                ),
                               ),
                             );
                           }, childCount: filteredGroups.length),
                         ),
-                      ],
+                      ] else ...[
+                        // 3. Group Detail: Directory or Member Transaction List
+                        if (selectedMemberId == null) ...[
+                          // Member Directory View
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Space Members 👥',
+                                    style: GoogleFonts.manrope(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: const Color(0xFF1E232A),
+                                    ),
+                                  ),
+                                  if (selectedGroup?.type == 'wages' && isAdmin)
+                                    ElevatedButton.icon(
+                                      icon: const Icon(Icons.add_rounded, size: 16, color: Colors.white),
+                                      label: Text(
+                                        'Pay Wages',
+                                        style: GoogleFonts.manrope(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF2E8B57),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        minimumSize: Size.zero,
+                                      ),
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => AddExpensePage(
+                                              initialGroupId: selectedGroupId,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
 
-                      // 3. Transactions Section Header with Dropdown Filter
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 28, 24, 12),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Group Expenses',
+                          ref.watch(groupMembersDetailsByIdProvider(selectedGroupId)).when(
+                            data: (members) {
+                              final isWages = selectedGroup?.type == 'wages';
+                              final displayMembers = members;
+
+                              if (displayMembers.isEmpty) {
+                                return SliverToBoxAdapter(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(24),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(color: Colors.grey[200]!),
+                                      ),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.people_outline_rounded, size: 48, color: Colors.grey[400]),
+                                          const SizedBox(height: 16),
+                                          Text(
+                                            isWages ? 'No Employees Added' : 'No Space Members',
+                                            style: GoogleFonts.manrope(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                              color: const Color(0xFF1E232A),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            isWages
+                                                ? 'Go to space settings to add employee members.'
+                                                : 'Go to space settings to add members.',
+                                            textAlign: TextAlign.center,
+                                            style: GoogleFonts.manrope(
+                                              fontSize: 13,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              final disambiguatedNames = Utils.getDisambiguatedNames(displayMembers);
+
+                              return SliverList(
+                                delegate: SliverChildBuilderDelegate((context, index) {
+                                  final member = displayMembers[index];
+                                  final mUid = member['uid'] as String;
+                                  final baseName = disambiguatedNames[mUid] ?? (member['name'] as String? ?? 'Member');
+                                  final mName = mUid == currentUserId ? '$baseName (You)' : baseName;
+                                  final mPhoto = member['photoUrl'] as String?;
+                                  
+                                  final isGroupAdmin = selectedGroup?.adminId == mUid || (selectedGroup?.admins.contains(mUid) ?? false);
+                                  final isWagesGroup = selectedGroup?.type == 'wages';
+                                  final isBusinessGroup = selectedGroup?.type == 'business';
+
+                                  // Calculate specific member balance/stats
+                                  double displayAmount = 0.0;
+                                  String labelText = '';
+                                  if (isWagesGroup) {
+                                    final mTransactions = transactions.where((t) => t.isShared && t.categoryId == 'cat_wages' && t.splitWith != null && t.splitWith!.contains(mUid));
+                                    for (var t in mTransactions) {
+                                      displayAmount += t.amount;
+                                    }
+                                    final isCurrentUserAdmin = selectedGroup?.adminId == currentUserId || (selectedGroup?.admins.contains(currentUserId) ?? false);
+                                    if (isCurrentUserAdmin) {
+                                      labelText = 'Wages Paid: ₹${displayAmount.toStringAsFixed(2)}';
+                                    } else if (mUid == currentUserId) {
+                                      labelText = 'Wages Received: ₹${displayAmount.toStringAsFixed(2)}';
+                                    } else {
+                                      labelText = '';
+                                    }
+                                  } else if (isBusinessGroup) {
+                                    final mTransactions = transactions.where((t) => t.userId == mUid);
+                                    for (var t in mTransactions) {
+                                      displayAmount += t.amount;
+                                    }
+                                    labelText = 'Spent: ₹${displayAmount.toStringAsFixed(2)}';
+                                  } else {
+                                    double bal = 0.0;
+                                    for (var b in balances) {
+                                      if (b.debtorId == mUid && b.creditorId == currentUserId) {
+                                        bal += b.amount;
+                                      } else if (b.creditorId == mUid && b.debtorId == currentUserId) {
+                                        bal -= b.amount;
+                                      }
+                                    }
+                                    if (bal > 0.01) {
+                                      labelText = 'Owes you: ₹${bal.toStringAsFixed(2)}';
+                                    } else if (bal < -0.01) {
+                                      labelText = 'You owe: ₹${bal.abs().toStringAsFixed(2)}';
+                                    } else {
+                                      labelText = 'Settled';
+                                    }
+                                  }
+
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+                                    child: Card(
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                        side: BorderSide(color: Colors.grey[200]!),
+                                      ),
+                                      color: Colors.white,
+                                      child: ListTile(
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                        leading: CircleAvatar(
+                                          radius: 22,
+                                          backgroundColor: const Color(0xFF2E8B57).withOpacity(0.1),
+                                          backgroundImage: mPhoto != null ? NetworkImage(mPhoto) : null,
+                                          child: mPhoto == null
+                                              ? Text(
+                                                  mName[0].toUpperCase(),
+                                                  style: GoogleFonts.manrope(
+                                                    fontWeight: FontWeight.bold,
+                                                    color: const Color(0xFF2E8B57),
+                                                  ),
+                                                )
+                                              : null,
+                                        ),
+                                        title: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                mName,
+                                                style: GoogleFonts.manrope(
+                                                  fontWeight: FontWeight.bold,
+                                                  color: const Color(0xFF1E232A),
+                                                ),
+                                              ),
+                                            ),
+                                            if (isGroupAdmin)
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.amber.shade50,
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(color: Colors.amber.shade200),
+                                                ),
+                                                child: Text(
+                                                  'Admin',
+                                                  style: GoogleFonts.manrope(
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.amber.shade800,
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                        subtitle: labelText.isNotEmpty
+                                            ? Padding(
+                                                padding: const EdgeInsets.only(top: 4),
+                                                child: Text(
+                                                  labelText,
+                                                  style: GoogleFonts.manrope(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: labelText.contains('owes') || labelText.contains('Wages')
+                                                        ? const Color(0xFF2E8B57)
+                                                        : labelText.contains('owe')
+                                                            ? Colors.red[700]
+                                                            : Colors.grey[600],
+                                                  ),
+                                                ),
+                                              )
+                                            : null,
+                                        trailing: isWagesGroup && !isAdmin && mUid != currentUserId
+                                            ? const Icon(Icons.lock_outline_rounded, color: Colors.grey, size: 20)
+                                            : const Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey, size: 16),
+                                        onTap: () {
+                                          if (isWagesGroup && !isAdmin && mUid != currentUserId) {
+                                            Utils.showErrorToast(
+                                              context,
+                                              alignment: Alignment.bottomCenter,
+                                              title: "Privacy Restricted",
+                                              description: "You are only allowed to view your own wages transactions.",
+                                            );
+                                            return;
+                                          }
+                                          ref.read(selectedMemberIdProvider.notifier).state = mUid;
+                                        },
+                                      ),
+                                    ),
+                                  );
+                                }, childCount: displayMembers.length),
+                              );
+                            },
+                            loading: () => const SliverToBoxAdapter(
+                              child: Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(32.0),
+                                  child: CircularProgressIndicator(color: Color(0xFF2E8B57)),
+                                ),
+                              ),
+                            ),
+                            error: (err, stack) => SliverToBoxAdapter(
+                              child: Center(
+                                child: Text('Error loading directory: $err'),
+                              ),
+                            ),
+                          ),
+                        ] else ...[
+                          // Member Detail & Transaction List View
+SliverToBoxAdapter(
+                            child: Consumer(
+                              builder: (context, ref, child) {
+                                final membersAsync = ref.watch(groupMembersDetailsByIdProvider(selectedGroupId));
+                                return membersAsync.when(
+                                  data: (members) {
+                                    final member = members.firstWhere((m) => m['uid'] == selectedMemberId, orElse: () => {});
+                                    if (member.isEmpty) return const SizedBox();
+                                    
+                                    final mUid = member['uid'] as String;
+                                    final disambiguatedNames = Utils.getDisambiguatedNames(members);
+                                    final baseName = disambiguatedNames[mUid] ?? (member['name'] as String? ?? 'Member');
+                                    final mName = mUid == currentUserId ? '$baseName (You)' : baseName;
+                                    final mPhoto = member['photoUrl'] as String?;
+                                    
+                                    final mEmail = member['email'] as String? ?? '';
+
+                                    return Container(
+                                      margin: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                                      padding: const EdgeInsets.all(20),
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(
+                                          colors: [Color(0xFF2E7D79), Color(0xFF429690)],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                        borderRadius: BorderRadius.circular(24),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: const Color(0xFF2E7D79).withOpacity(0.3),
+                                            blurRadius: 16,
+                                            offset: const Offset(0, 8),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Column(
+                                        children: [
+                                          Row(
+                                            children: [
+                                              CircleAvatar(
+                                                radius: 26,
+                                                backgroundColor: Colors.white.withOpacity(0.2),
+                                                backgroundImage: mPhoto != null ? NetworkImage(mPhoto) : null,
+                                                child: mPhoto == null
+                                                    ? Text(
+                                                        mName[0].toUpperCase(),
+                                                        style: GoogleFonts.manrope(
+                                                          fontWeight: FontWeight.bold,
+                                                          fontSize: 20,
+                                                          color: Colors.white,
+                                                        ),
+                                                      )
+                                                    : null,
+                                              ),
+                                              const SizedBox(width: 16),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      mName,
+                                                      style: GoogleFonts.manrope(
+                                                        fontSize: 18,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
+                                                    if (mEmail.isNotEmpty)
+                                                      Padding(
+                                                        padding: const EdgeInsets.only(top: 2),
+                                                        child: Text(
+                                                          mEmail,
+                                                          style: GoogleFonts.manrope(
+                                                            fontSize: 12,
+                                                            color: Colors.white70,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          if (isWages && isAdmin) ...[
+                                             const SizedBox(height: 16),
+                                            ElevatedButton.icon(
+                                              icon: const Icon(Icons.add_rounded, size: 18, color: Color(0xFF2E7D79)),
+                                              label: Text(
+                                                'Record Wages Payment',
+                                                style: GoogleFonts.manrope(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: const Color(0xFF2E7D79),
+                                                ),
+                                              ),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.white,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(12),
+                                                ),
+                                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                                minimumSize: const Size(double.infinity, 44),
+                                              ),
+                                              onPressed: () {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) => AddExpensePage(
+                                                      initialGroupId: selectedGroupId,
+                                                      initialRecipientId: selectedMemberId,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                  loading: () => const SizedBox(),
+                                  error: (_, __) => const SizedBox(),
+                                );
+                              },
+                            ),
+                          ),
+
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+                              child: Text(
+                                'Transactions Ledger',
                                 style: GoogleFonts.manrope(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
                                   color: const Color(0xFF1E232A),
                                 ),
                               ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: Colors.grey[200]!),
-                                ),
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String?>(
-                                    value: selectedGroupId,
-                                    hint: Text(
-                                      'All Groups',
-                                      style: GoogleFonts.manrope(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    style: GoogleFonts.manrope(
-                                      fontSize: 12,
-                                      color: const Color(0xFF1E232A),
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    items: [
-                                      DropdownMenuItem<String?>(
-                                        value: null,
-                                        child: Text(
-                                          'All Groups',
-                                          style: GoogleFonts.manrope(),
-                                        ),
-                                      ),
-                                      ...groups.map((g) {
-                                        return DropdownMenuItem<String?>(
-                                          value: g.id,
-                                          child: Text(
-                                            g.name,
-                                            style: GoogleFonts.manrope(),
-                                          ),
-                                        );
-                                      }),
-                                    ],
-                                    onChanged: (val) {
-                                      ref
-                                              .read(
-                                                selectedGroupFilterProvider
-                                                    .notifier,
-                                              )
-                                              .state =
-                                          val;
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ),
 
-                      allTransactionsAsync.when(
-                        data: (transactions) {
-                          // Filter list
-                          final filteredTransactions = selectedGroupId == null
-                              ? transactions
-                              : transactions
-                                    .where((t) => t.groupId == selectedGroupId)
-                                    .toList();
+                          Consumer(
+                            builder: (context, ref, child) {
+                              final isWagesGroup = selectedGroup?.type == 'wages';
+                              final isBusinessGroup = selectedGroup?.type == 'business';
 
-                          if (filteredTransactions.isEmpty) {
-                            return const SliverToBoxAdapter(
-                              child: Center(
-                                child: Padding(
-                                  padding: EdgeInsets.all(32.0),
-                                  child: Text(
-                                    'No transactions recorded yet.',
-                                    style: TextStyle(color: Colors.grey),
+                              final memberTransactions = transactions.where((t) {
+                                if (isWagesGroup) {
+                                  return t.isShared && t.categoryId == 'cat_wages' && t.splitWith != null && t.splitWith!.contains(selectedMemberId);
+                                } else if (isBusinessGroup) {
+                                  return t.userId == selectedMemberId;
+                                } else {
+                                  return t.userId == selectedMemberId || (t.isShared && t.splitWith != null && t.splitWith!.contains(selectedMemberId));
+                                }
+                              }).toList();
+
+                              if (memberTransactions.isEmpty) {
+                                return const SliverToBoxAdapter(
+                                  child: Center(
+                                    child: Padding(
+                                      padding: EdgeInsets.all(32.0),
+                                      child: Text(
+                                        'No transactions found.',
+                                        style: TextStyle(color: Colors.grey),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                            );
-                          }
-
-                          return SliverList(
-                            delegate: SliverChildBuilderDelegate((
-                              context,
-                              index,
-                            ) {
-                              final t = filteredTransactions[index];
-                              final isMePayer = t.userId == currentUserId;
-                              final payerName = isMePayer
-                                  ? 'You'
-                                  : (memberNames[t.userId] ?? 'Group Member');
-                              final groupName =
-                                  groupNames[t.groupId] ?? 'Group';
-
-                              final inSplit =
-                                  t.splitWith != null &&
-                                  t.splitWith!.contains(currentUserId);
-
-                              double myShare = 0.0;
-                              if (t.splitAmounts != null &&
-                                  t.splitAmounts!.containsKey(currentUserId)) {
-                                myShare = t.splitAmounts![currentUserId]!;
-                              } else if (t.splitWith != null &&
-                                  t.splitWith!.isNotEmpty) {
-                                myShare = t.amount / t.splitWith!.length;
+                                );
                               }
 
-                              String splitStatus = '';
-                              Color statusColor = Colors.grey[600]!;
+                              return SliverList(
+                                delegate: SliverChildBuilderDelegate((context, index) {
+                                  final t = memberTransactions[index];
+                                  final isExpense = isWagesGroup ? false : t.isExpense;
+                                  final dateStr = DateFormat('MMM dd, yyyy').format(t.date);
 
-                              if (t.splitWith != null &&
-                                  t.splitWith!.isNotEmpty) {
-                                if (isMePayer) {
-                                  final lent = t.amount - myShare;
-                                  splitStatus =
-                                      'You lent ₹${lent.toStringAsFixed(2)}';
-                                  statusColor = Colors.green[700]!;
-                                } else {
-                                  if (inSplit) {
-                                    splitStatus =
-                                        'You owe ₹${myShare.toStringAsFixed(2)}';
-                                    statusColor = Colors.red[700]!;
-                                  } else {
-                                    splitStatus = 'Not involved';
-                                    statusColor = Colors.grey[600]!;
-                                  }
-                                }
-                              } else {
-                                // Non-shared group expense (e.g. recorded under business group)
-                                if (isMePayer) {
-                                  splitStatus = t.isExpense
-                                      ? 'You paid'
-                                      : 'You received';
-                                  statusColor = t.isExpense
-                                      ? Colors.red[700]!
-                                      : Colors.green[700]!;
-                                } else {
-                                  splitStatus = t.isExpense
-                                      ? 'Employee paid'
-                                      : 'Employee received';
-                                  statusColor = Colors.grey[600]!;
-                                }
-                              }
-
-                              final splitMembersNames =
-                                  t.splitWith?.map((uid) {
-                                    return uid == currentUserId
-                                        ? 'You'
-                                        : (memberNames[uid] ?? 'Group Member');
-                                  }).toList() ??
-                                  [];
-
-                              String splitDesc = '';
-                              if (splitMembersNames.isNotEmpty) {
-                                splitDesc =
-                                    ' • Split with ${splitMembersNames.join(', ')}';
-                              }
-
-                              final dateStr = DateFormat(
-                                'MMM dd, yyyy',
-                              ).format(t.date);
-
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                  vertical: 6,
-                                ),
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    onTap: () {
-                                      showGeneralDialog(
-                                        context: context,
-                                        barrierDismissible: true,
-                                        barrierLabel: '',
-                                        barrierColor: Colors.black54,
-                                        transitionDuration: const Duration(
-                                          milliseconds: 350,
+                                  Widget? paymentBadge;
+                                  if (isWagesGroup && t.paymentMode != null) {
+                                    final isCash = t.paymentMode!.toLowerCase() == 'cash';
+                                    paymentBadge = Container(
+                                      margin: const EdgeInsets.only(top: 4),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: isCash ? Colors.amber.shade50 : Colors.blue.shade50,
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: isCash ? Colors.amber.shade200 : Colors.blue.shade200),
+                                      ),
+                                      child: Text(
+                                        isCash ? '💵 Cash' : '💳 Online',
+                                        style: GoogleFonts.manrope(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
+                                          color: isCash ? Colors.amber.shade800 : Colors.blue.shade800,
                                         ),
-                                        pageBuilder: (_, __, ___) =>
-                                            TransactionDetailDialog(
-                                              transaction: t,
-                                            ),
-                                        transitionBuilder:
-                                            (_, animation, __, child) {
-                                              return ScaleTransition(
-                                                scale: CurvedAnimation(
-                                                  parent: animation,
-                                                  curve: Curves.easeOutBack,
-                                                ),
-                                                child: FadeTransition(
-                                                  opacity: CurvedAnimation(
-                                                    parent: animation,
-                                                    curve: Curves.easeIn,
-                                                  ),
-                                                  child: child,
-                                                ),
-                                              );
-                                            },
-                                      );
-                                    },
-                                    borderRadius: BorderRadius.circular(16),
+                                      ),
+                                    );
+                                  }
+
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
                                     child: Container(
                                       decoration: BoxDecoration(
                                         color: Colors.white,
                                         borderRadius: BorderRadius.circular(16),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: Colors.black.withOpacity(
-                                              0.02,
-                                            ),
-                                            blurRadius: 8,
+                                            color: Colors.black.withOpacity(0.02),
+                                            blurRadius: 10,
                                             offset: const Offset(0, 2),
                                           ),
                                         ],
                                       ),
-                                      padding: const EdgeInsets.all(16),
-                                      child: Row(
-                                        children: [
-                                          CircleAvatar(
-                                            backgroundColor: t.color
-                                                .withOpacity(0.12),
-                                            child: Icon(
-                                              t.icon,
-                                              color: t.color,
-                                              size: 20,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 14),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          borderRadius: BorderRadius.circular(16),
+                                          onTap: () {
+                                            showDialog(
+                                              context: context,
+                                              builder: (_) => TransactionDetailDialog(transaction: t),
+                                            );
+                                          },
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(16.0),
+                                            child: Row(
                                               children: [
-                                                Row(
-                                                  children: [
-                                                    Expanded(
-                                                      child: Text(
-                                                        t.description.isNotEmpty
-                                                            ? t.description
-                                                            : t.categoryName,
-                                                        style:
-                                                            GoogleFonts.manrope(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
-                                                              fontSize: 15,
-                                                              color:
-                                                                  const Color(
-                                                                    0xFF1E232A,
-                                                                  ),
-                                                            ),
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    Container(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 6,
-                                                            vertical: 2,
-                                                          ),
-                                                      decoration: BoxDecoration(
-                                                        color: const Color(
-                                                          0xFFE6F3F2,
-                                                        ),
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              6,
-                                                            ),
-                                                      ),
-                                                      child: Text(
-                                                        groupName,
-                                                        style:
-                                                            GoogleFonts.manrope(
-                                                              fontSize: 10,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w800,
-                                                              color:
-                                                                  const Color(
-                                                                    0xFF2E7D79,
-                                                                  ),
-                                                            ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  'Paid by $payerName$splitDesc • $dateStr',
-                                                  style: GoogleFonts.manrope(
-                                                    fontSize: 12,
-                                                    color: Colors.grey[500],
+                                                Container(
+                                                  padding: const EdgeInsets.all(10),
+                                                  decoration: BoxDecoration(
+                                                    color: Color(t.colorValue).withOpacity(0.12),
+                                                    shape: BoxShape.circle,
                                                   ),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
+                                                  child: Icon(
+                                                    IconData(t.iconCodePoint, fontFamily: 'MaterialIcons'),
+                                                    color: Color(t.colorValue),
+                                                    size: 20,
+                                                  ),
+                                                ),
+                                                 const SizedBox(width: 16),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        isWagesGroup
+                                                            ? '💸 ${t.description.isNotEmpty ? t.description : t.categoryName}'
+                                                            : (t.description.isNotEmpty ? t.description : t.categoryName),
+                                                        style: GoogleFonts.manrope(
+                                                          fontWeight: FontWeight.bold,
+                                                          color: const Color(0xFF1E232A),
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        '$dateStr  •  By ${t.userId == currentUserId ? "You" : (memberNames[t.userId] ?? "Member")}',
+                                                        style: GoogleFonts.manrope(
+                                                          fontSize: 11,
+                                                          color: Colors.grey[500],
+                                                          fontWeight: FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                      if (paymentBadge != null) paymentBadge,
+                                                    ],
+                                                  ),
+                                                ),
+                                                Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                                  children: [
+                                                    Text(
+                                                      '${isExpense ? "-" : "+"} ₹${t.amount.toStringAsFixed(2)}',
+                                                      style: GoogleFonts.manrope(
+                                                        fontWeight: FontWeight.w900,
+                                                        fontSize: 15,
+                                                        color: isExpense ? Colors.red[700] : Colors.green[700],
+                                                      ),
+                                                    ),
+                                                    if (isWagesGroup && isAdmin) ...[
+                                                      const SizedBox(height: 4),
+                                                      Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          IconButton(
+                                                            icon: const Icon(Icons.replay_circle_filled_rounded, color: Colors.blue, size: 20),
+                                                            padding: EdgeInsets.zero,
+                                                            constraints: const BoxConstraints(),
+                                                            tooltip: 'Repeat Payment',
+                                                            onPressed: () {
+                                                              Navigator.push(
+                                                                context,
+                                                                MaterialPageRoute(
+                                                                  builder: (_) => AddExpensePage(
+                                                                    initialGroupId: selectedGroupId,
+                                                                    initialRecipientId: selectedMemberId,
+                                                                    initialAmount: t.amount,
+                                                                    initialDescription: t.description,
+                                                                    initialPaymentMode: t.paymentMode,
+                                                                  ),
+                                                                ),
+                                                              );
+                                                            },
+                                                          ),
+                                                          const SizedBox(width: 8),
+                                                          IconButton(
+                                                            icon: const Icon(Icons.edit_rounded, color: Colors.amber, size: 20),
+                                                            padding: EdgeInsets.zero,
+                                                            constraints: const BoxConstraints(),
+                                                            tooltip: 'Edit',
+                                                            onPressed: () {
+                                                              Navigator.push(
+                                                                context,
+                                                                MaterialPageRoute(
+                                                                  builder: (_) => AddExpensePage(
+                                                                    editTransaction: t,
+                                                                  ),
+                                                                ),
+                                                              );
+                                                            },
+                                                          ),
+                                                          const SizedBox(width: 8),
+                                                          IconButton(
+                                                            icon: const Icon(Icons.delete_rounded, color: Colors.red, size: 20),
+                                                            padding: EdgeInsets.zero,
+                                                            constraints: const BoxConstraints(),
+                                                            tooltip: 'Delete',
+                                                            onPressed: () async {
+                                                              final confirm = await showDialog<bool>(
+                                                                context: context,
+                                                                builder: (context) => AlertDialog(
+                                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                                                  title: Text('Delete Transaction', style: GoogleFonts.manrope(fontWeight: FontWeight.bold)),
+                                                                  content: Text('Are you sure you want to delete this wages payment?', style: GoogleFonts.manrope()),
+                                                                  actions: [
+                                                                    TextButton(
+                                                                      onPressed: () => Navigator.pop(context, false),
+                                                                      child: Text('Cancel', style: GoogleFonts.manrope(color: Colors.grey)),
+                                                                    ),
+                                                                    ElevatedButton(
+                                                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                                                      onPressed: () => Navigator.pop(context, true),
+                                                                      child: Text('Delete', style: GoogleFonts.manrope(color: Colors.white)),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              );
+                                                              if (confirm == true) {
+                                                                await ref.read(transactionViewModelProvider.notifier).deleteTransaction(t);
+                                                              }
+                                                            },
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ],
+                                                  ],
                                                 ),
                                               ],
                                             ),
                                           ),
-                                          const SizedBox(width: 8),
-                                          Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.end,
-                                            children: [
-                                              Text(
-                                                '₹${t.amount.toStringAsFixed(2)}',
-                                                style: GoogleFonts.manrope(
-                                                  fontWeight: FontWeight.w800,
-                                                  fontSize: 15,
-                                                  color: const Color(
-                                                    0xFF1E232A,
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                splitStatus,
-                                                style: GoogleFonts.manrope(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: statusColor,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ),
+                                  );
+                                }, childCount: memberTransactions.length),
                               );
-                            }, childCount: filteredTransactions.length),
-                          );
-                        },
-                        loading: () => const SliverToBoxAdapter(
-                          child: Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(32.0),
-                              child: CircularProgressIndicator(
-                                color: Color(0xFF2E8B57),
-                              ),
-                            ),
+                            },
                           ),
-                        ),
-                        error: (err, stack) => SliverToBoxAdapter(
-                          child: Center(
-                            child: Text(
-                              'Error: $err',
-                              style: const TextStyle(color: Colors.red),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ] else ...[
-                      // ─── ACTIVITY LOG TAB ───
+                        ]
+                      ]
+                    ],
+                    // ─── ACTIVITY LOG TAB ───
+                    if (currentTab == 1) ...[
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
@@ -1197,6 +1768,7 @@ class SplitLedgerPage extends ConsumerWidget {
                 ),
               ),
             ),
+      ),
     );
   }
 

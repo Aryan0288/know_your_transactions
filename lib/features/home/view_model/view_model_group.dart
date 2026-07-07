@@ -58,6 +58,15 @@ final groupLogsStreamProvider = StreamProvider.family<List<Map<String, dynamic>>
     data: (group) {
       if (group == null) return Stream.value(<Map<String, dynamic>>[]);
       
+      final groupType = group.toMap()['type'] as String? ?? 'split';
+      final adminId = group.toMap()['adminId'] as String? ?? '';
+      final groupAdmins = List<String>.from(group.toMap()['admins'] ?? []);
+      final isAdmin = groupAdmins.contains(currentUserId) || currentUserId == adminId;
+
+      if (groupType == 'wages' && !isAdmin) {
+        return Stream.value(<Map<String, dynamic>>[]);
+      }
+
       var query = FirebaseFirestore.instance
           .collection('groups')
           .doc(groupId)
@@ -69,15 +78,23 @@ final groupLogsStreamProvider = StreamProvider.family<List<Map<String, dynamic>>
       return query.snapshots().map((snapshot) {
         final groupType = group.toMap()['type'] as String? ?? 'split';
         final adminId = group.toMap()['adminId'] as String? ?? '';
-        final isAdmin = currentUserId == adminId;
+        final groupAdmins = List<String>.from(group.toMap()['admins'] ?? []);
+        final isAdmin = groupAdmins.contains(currentUserId) || currentUserId == adminId;
 
         return snapshot.docs.map((doc) {
           final data = doc.data();
           data['id'] = doc.id;
           return data;
         }).where((log) {
+          if (log['action'] == 'add') {
+            return false; // Filter out 'add' logs entirely for transparency
+          }
           if (groupType == 'business') {
             return log['userRole'] == 'admin';
+          }
+          if (groupType == 'wages') {
+            if (isAdmin) return true;
+            return log['targetUserId'] == currentUserId;
           }
           return true;
         }).toList();
@@ -165,6 +182,20 @@ final pendingInvitationsProvider = StreamProvider<List<Map<String, dynamic>>>((r
       });
 });
 
+final groupSentPendingInvitationsProvider = StreamProvider.family<List<Map<String, dynamic>>, String>((ref, groupId) {
+  if (groupId.isEmpty) return Stream.value([]);
+  return FirebaseFirestore.instance
+      .collection('invitations')
+      .where('fromGroupId', isEqualTo: groupId)
+      .where('status', isEqualTo: 'pending')
+      .snapshots()
+      .map((snapshot) => snapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id;
+            return data;
+          }).toList());
+});
+
 final groupTransactionsStreamByIdProvider = StreamProvider.family<List<TransactionModel>, String>((ref, groupId) {
   if (groupId.isEmpty) return Stream.value([]);
   
@@ -184,6 +215,11 @@ final groupTransactionsStreamByIdProvider = StreamProvider.family<List<Transacti
 
       
       return query.snapshots().map((snapshot) {
+        final groupType = group.toMap()['type'] as String? ?? 'split';
+        final adminId = group.toMap()['adminId'] as String? ?? '';
+        final groupAdmins = List<String>.from(group.toMap()['admins'] ?? []);
+        final isAdmin = groupAdmins.contains(currentUserId) || currentUserId == adminId;
+
         return snapshot.docs
             .map((doc) {
               final data = doc.data();
@@ -191,6 +227,13 @@ final groupTransactionsStreamByIdProvider = StreamProvider.family<List<Transacti
                 data['groupId'] = groupId;
               }
               return TransactionModel.fromMap(data, doc.id);
+            })
+            .where((tx) {
+              if (groupType == 'wages') {
+                if (isAdmin) return true;
+                return tx.splitWith != null && tx.splitWith!.contains(currentUserId);
+              }
+              return true;
             })
             .toList();
       });
@@ -387,6 +430,7 @@ class GroupController extends StateNotifier<AsyncValue<void>> {
         members: [user.uid],
         memberLimits: {},
         type: type,
+        admins: [user.uid],
       );
 
       // Create group document
@@ -498,6 +542,32 @@ class GroupController extends StateNotifier<AsyncValue<void>> {
     }
   }
 
+  Future<bool> promoteToAdmin(String memberUid) async {
+    final groupId = ref.read(userGroupIdProvider);
+    if (groupId == null) return false;
+    try {
+      await _firestore.collection('groups').doc(groupId).update({
+        'admins': FieldValue.arrayUnion([memberUid]),
+      });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> demoteFromAdmin(String memberUid) async {
+    final groupId = ref.read(userGroupIdProvider);
+    if (groupId == null) return false;
+    try {
+      await _firestore.collection('groups').doc(groupId).update({
+        'admins': FieldValue.arrayRemove([memberUid]),
+      });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   Future<bool> leaveGroup() async {
     final user = ref.read(firebaseAuthProvider).currentUser;
     final groupId = ref.read(userGroupIdProvider);
@@ -586,6 +656,42 @@ class GroupController extends StateNotifier<AsyncValue<void>> {
       await _firestore.collection('users').doc(user.uid).update({
         'groupId': groupId,
         'groupRole': isAdmin ? 'admin' : 'member',
+      });
+
+      state = const AsyncValue.data(null);
+      return true;
+    } catch (e, stack) {
+      state = AsyncValue.error(e, stack);
+      return false;
+    }
+  }
+
+  Future<bool> cancelInvitation(String invitationId) async {
+    state = const AsyncValue.loading();
+    try {
+      await _firestore.collection('invitations').doc(invitationId).delete();
+      state = const AsyncValue.data(null);
+      return true;
+    } catch (e, stack) {
+      state = AsyncValue.error(e, stack);
+      return false;
+    }
+  }
+
+  Future<bool> removeMemberFromGroup(String memberUid) async {
+    final groupId = ref.read(userGroupIdProvider);
+    if (groupId == null) return false;
+
+    state = const AsyncValue.loading();
+    try {
+      await _firestore.collection('groups').doc(groupId).update({
+        'members': FieldValue.arrayRemove([memberUid]),
+        'admins': FieldValue.arrayRemove([memberUid]),
+      });
+
+      await _firestore.collection('users').doc(memberUid).update({
+        'groupId': null,
+        'groupRole': null,
       });
 
       state = const AsyncValue.data(null);

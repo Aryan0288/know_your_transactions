@@ -99,4 +99,37 @@ class Utils {
       closeButtonShowType: CloseButtonShowType.onHover,
     );
   }
+
+  static Map<String, String> getDisambiguatedNames(List<Map<String, dynamic>> members) {
+    // Sort members by UID to guarantee stable sequential IDs
+    final sortedMembers = List<Map<String, dynamic>>.from(members)
+      ..sort((a, b) => (a['uid'] as String).compareTo(b['uid'] as String));
+
+    // Assign sequential IDs: 001, 002, 003...
+    final memberIds = <String, String>{};
+    for (int i = 0; i < sortedMembers.length; i++) {
+      final uid = sortedMembers[i]['uid'] as String;
+      final numStr = (i + 1).toString().padLeft(3, '0');
+      memberIds[uid] = numStr;
+    }
+
+    final nameCount = <String, int>{};
+    for (final m in members) {
+      final name = m['name'] as String? ?? 'Member';
+      nameCount[name] = (nameCount[name] ?? 0) + 1;
+    }
+
+    final result = <String, String>{};
+    for (final m in members) {
+      final uid = m['uid'] as String;
+      final name = m['name'] as String? ?? 'Member';
+      final seqId = memberIds[uid] ?? '000';
+      if (nameCount[name]! > 1) {
+        result[uid] = '$name ($seqId)';
+      } else {
+        result[uid] = name;
+      }
+    }
+    return result;
+  }
 }

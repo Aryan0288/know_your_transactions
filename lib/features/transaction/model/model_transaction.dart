@@ -50,6 +50,7 @@ class TransactionModel {
   final List<String>? splitWith;
   final Map<String, double>? splitAmounts;
   final String? groupId;
+  final String? paymentMode; // 'cash' or 'online'
 
   TransactionModel({
     required this.id,
@@ -66,6 +67,7 @@ class TransactionModel {
     this.splitWith,
     this.splitAmounts,
     this.groupId,
+    this.paymentMode,
   });
 
   Map<String, dynamic> toMap() {
@@ -83,6 +85,7 @@ class TransactionModel {
       'splitWith': splitWith,
       'splitAmounts': splitAmounts,
       'groupId': groupId,
+      'paymentMode': paymentMode,
     };
   }
 
@@ -106,6 +109,7 @@ class TransactionModel {
             )
           : null,
       groupId: map['groupId'] as String?,
+      paymentMode: map['paymentMode'] as String?,
     );
   }
 
