@@ -1,10 +1,13 @@
 import 'dart:math';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:know_your_expenses/features/force_update/view/force_update_page.dart';
 import 'package:know_your_expenses/features/force_update/view_model/force_update_provider.dart';
+import 'package:know_your_expenses/features/helper/fcm_notification.dart';
+import 'package:know_your_expenses/features/helper/notification_helper.dart';
 import 'package:know_your_expenses/features/home/view/page_home.dart';
 import 'package:know_your_expenses/features/login_signup/auth_helper.dart';
 import 'package:know_your_expenses/features/transaction/view/page_expense_transaction.dart';
@@ -39,9 +42,22 @@ class _SplashPageState extends ConsumerState<SplashPage>
   void initState() {
     super.initState();
 
-    // ── Fire Firestore check FIRST, before any animation setup ──────────────
-    // This future runs in the background while animations play (~1s).
-    // By the time animations finish, the result is likely already ready.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      FcmNotification notificationService = FcmNotification();
+      NotificationHelper notificationHelper = NotificationHelper();
+      notificationService.requestNotificationPermission();
+      notificationService.token();
+
+      FirebaseMessaging.onMessage.listen((RemoteMessage message){
+        final currentUser = FirebaseAuth.instance.currentUser;
+        if (currentUser != null) {
+          notificationHelper.handleEveningSummary(currentUser.uid); // 👈 Uses active log-in identity
+        } else {
+          print("No user is logged in to fetch transactions!");
+        }
+      });
+    });
+
     _forceUpdateFuture = ref.read(forceUpdateProvider.future);
     // ────────────────────────────────────────────────────────────────────────
 

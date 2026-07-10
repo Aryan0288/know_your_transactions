@@ -1,5 +1,6 @@
 import 'package:cloudinary_flutter/cloudinary_context.dart';
 import 'package:cloudinary_url_gen/cloudinary.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,8 +9,13 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:know_your_expenses/features/helper/notification_helper.dart';
 
+Future<void> _backgroundMessageHandler(RemoteMessage message)async{
+  await Firebase.initializeApp();
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FirebaseMessaging.onBackgroundMessage(_backgroundMessageHandler);
   await Firebase.initializeApp();
   
   // Initialize AdMob and Notifications

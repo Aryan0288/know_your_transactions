@@ -47,7 +47,7 @@ void callbackDispatcher() {
         }
       } else if (task == "evening-summary") {
         if (userId != null) {
-          await _handleEveningSummary(userId);
+          await NotificationHelper().handleEveningSummary(userId);
         } else {
           debugPrint("Workmanager: evening-summary skipped because userId is null");
         }
@@ -162,7 +162,7 @@ Future<void> _handleMorningSummary(String userId) async {
     'Morning Summary',
     channelDescription: 'Yesterday spend and available balance summary',
     importance: Importance.max,
-    priority: Priority.high,
+    priority: Priority.max,
   );
 
   final String bodyMessage = yesterdaySpent > 0
@@ -174,218 +174,12 @@ Future<void> _handleMorningSummary(String userId) async {
     title: "Yesterday's Summary 💸",
     body: bodyMessage,
     notificationDetails: const NotificationDetails(
-      android: androidDetails,
-      iOS: DarwinNotificationDetails(),
+      android: androidDetails
     ),
   );
 }
 
-Future<void> _handleEveningSummary(String userId) async {
-  final now = DateTime.now();
-  final todayStart = DateTime(now.year, now.month, now.day, 0, 0, 0);
-  final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
 
-  final personalSnapshot = await FirebaseFirestore.instance
-      .collection('users')
-      .doc(userId)
-      .collection('transactions')
-      .get();
-
-  final groupsSnapshot = await FirebaseFirestore.instance
-      .collection('groups')
-      .where('members', arrayContains: userId)
-      .get();
-
-  final List<Map<String, dynamic>> allTransactions = [];
-  for (var doc in personalSnapshot.docs) {
-    allTransactions.add(doc.data());
-  }
-
-  final List<Map<String, dynamic>> groupTransactionsTodayOther = [];
-
-  for (var groupDoc in groupsSnapshot.docs) {
-    final groupData = groupDoc.data();
-    final groupName = groupData['name'] ?? 'Unknown Group';
-    final groupType = groupData['type'] ?? 'split';
-
-    DateTime? createdDate;
-    final rawCreatedAt = groupData['createdAt'];
-    if (rawCreatedAt != null) {
-      if (rawCreatedAt is Timestamp) {
-        createdDate = rawCreatedAt.toDate();
-      } else if (rawCreatedAt is String) {
-        createdDate = DateTime.tryParse(rawCreatedAt);
-      }
-    }
-    if (createdDate != null) {
-      if (createdDate.isAfter(todayStart) && createdDate.isBefore(todayEnd)) {
-        final adminId = groupData['adminId'] ?? '';
-        String creatorName = 'Someone';
-        if (adminId.isNotEmpty) {
-          final adminDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(adminId)
-              .get();
-          creatorName = adminDoc.data()?['name'] ?? 'Someone';
-        }
-
-        const AndroidNotificationDetails groupCreatedDetails = AndroidNotificationDetails(
-          'group_creation_channel',
-          'Group Creation',
-          channelDescription: 'Notifications when new groups are created',
-          importance: Importance.max,
-          priority: Priority.high,
-        );
-        await flutterLocalNotificationsPlugin.show(
-          id: groupDoc.id.hashCode,
-          title: "New Group Created! 👥",
-          body: "$creatorName created group '$groupName'. Tap to view.",
-          notificationDetails: const NotificationDetails(
-            android: groupCreatedDetails,
-            iOS: DarwinNotificationDetails(),
-          ),
-        );
-      }
-    }
-
-    final groupTxsSnapshot = await FirebaseFirestore.instance
-        .collection('groups')
-        .doc(groupDoc.id)
-        .collection('transactions')
-        .get();
-
-    for (var txDoc in groupTxsSnapshot.docs) {
-      final txData = txDoc.data();
-      allTransactions.add(txData);
-
-      DateTime? txDate;
-      final rawTxDate = txData['date'];
-      if (rawTxDate != null) {
-        if (rawTxDate is Timestamp) {
-          txDate = rawTxDate.toDate();
-        } else if (rawTxDate is String) {
-          txDate = DateTime.tryParse(rawTxDate);
-        }
-      }
-      if (txDate != null) {
-        final txUserId = txData['userId'] as String? ?? '';
-        if (txDate.isAfter(todayStart) &&
-            txDate.isBefore(todayEnd) &&
-            txUserId != userId) {
-          groupTransactionsTodayOther.add({
-            ...txData,
-            'groupName': groupName,
-            'groupType': groupType,
-          });
-        }
-      }
-    }
-  }
-
-  for (var tx in groupTransactionsTodayOther) {
-    final groupType = tx['groupType'] as String;
-    if (groupType == 'business') {
-      final txUserId = tx['userId'] as String;
-      final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
-      final description = tx['description'] ?? 'Expense';
-      final groupName = tx['groupName'] ?? 'Group';
-
-      String memberName = 'Someone';
-      if (txUserId.isNotEmpty) {
-        final memberDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(txUserId)
-            .get();
-        memberName = memberDoc.data()?['name'] ?? 'Someone';
-      }
-
-      const AndroidNotificationDetails txDetails = AndroidNotificationDetails(
-        'group_transactions_channel',
-        'Group Transactions',
-        channelDescription: 'Notifications for transactions added by other members',
-        importance: Importance.max,
-        priority: Priority.high,
-      );
-
-      await flutterLocalNotificationsPlugin.show(
-        id: tx['id']?.hashCode ?? now.hashCode,
-        title: "New Shared Expense 💸",
-        body: "$memberName added ₹${amount.toStringAsFixed(2)} for '$description' in '$groupName'.",
-        notificationDetails: const NotificationDetails(
-          android: txDetails,
-          iOS: DarwinNotificationDetails(),
-        ),
-      );
-    }
-  }
-
-  double totalIncome = 0.0;
-  double totalExpense = 0.0;
-  double todaySpent = 0.0;
-
-  for (var data in allTransactions) {
-    DateTime? date;
-    final rawDate = data['date'];
-    if (rawDate != null) {
-      if (rawDate is Timestamp) {
-        date = rawDate.toDate();
-      } else if (rawDate is String) {
-        date = DateTime.tryParse(rawDate);
-      }
-    }
-    if (date == null) continue;
-    double amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
-    final isShared = data['isShared'] as bool? ?? false;
-    final splitWith = List<String>.from(data['splitWith'] ?? []);
-    final splitAmounts = Map<String, dynamic>.from(data['splitAmounts'] ?? {});
-    final isExpense = data['isExpense'] as bool? ?? true;
-
-    if (isShared && splitWith.isNotEmpty) {
-      if (splitWith.contains(userId)) {
-        if (splitAmounts.containsKey(userId)) {
-          amount = (splitAmounts[userId] as num?)?.toDouble() ?? 0.0;
-        } else {
-          amount = amount / splitWith.length;
-        }
-      } else {
-        amount = 0.0;
-      }
-    }
-
-    if (isExpense) {
-      totalExpense += amount;
-      if (date.isAfter(todayStart) && date.isBefore(todayEnd)) {
-        todaySpent += amount;
-      }
-    } else {
-      totalIncome += amount;
-    }
-  }
-
-  final balance = totalIncome - totalExpense;
-
-  const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-    'evening_summary_channel',
-    'Evening Summary',
-    channelDescription: 'Today spend and available balance summary',
-    importance: Importance.max,
-    priority: Priority.high,
-  );
-
-  final String bodyMessage = todaySpent > 0
-      ? "Today's Summary 📊 Today you spent ₹${todaySpent.toStringAsFixed(2)}. Available balance: ₹${balance.toStringAsFixed(2)}."
-      : "You spent ₹0 today! Great job saving money. 💰";
-
-  await flutterLocalNotificationsPlugin.show(
-    id: 20,
-    title: "Today's Summary",
-    body: bodyMessage,
-    notificationDetails: const NotificationDetails(
-      android: androidDetails,
-      iOS: DarwinNotificationDetails(),
-    ),
-  );
-}
 
 class NotificationHelper {
   static Future<void> initialize() async {
@@ -395,15 +189,11 @@ class NotificationHelper {
           AndroidInitializationSettings('@mipmap/ic_launcher');
 
       const InitializationSettings settings = InitializationSettings(
-        android: androidSettings,
-        iOS: DarwinInitializationSettings(),
+        android: androidSettings
       );
 
       await flutterLocalNotificationsPlugin.initialize(
-        settings: settings,
-        onDidReceiveNotificationResponse: (NotificationResponse response) {
-          // Handle notification click: wakes up app
-        },
+        settings: settings
       );
 
       // Initialize timezone database
@@ -466,6 +256,213 @@ class NotificationHelper {
       debugPrint("NotificationHelper.initialize error: $e");
     }
   }
+
+  Future<void> handleEveningSummary(String userId) async {
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day, 0, 0, 0);
+    final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
+    final personalSnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('transactions')
+        .get();
+
+    final groupsSnapshot = await FirebaseFirestore.instance
+        .collection('groups')
+        .where('members', arrayContains: userId)
+        .get();
+
+    final List<Map<String, dynamic>> allTransactions = [];
+    for (var doc in personalSnapshot.docs) {
+      allTransactions.add(doc.data());
+    }
+
+    final List<Map<String, dynamic>> groupTransactionsTodayOther = [];
+
+    for (var groupDoc in groupsSnapshot.docs) {
+      final groupData = groupDoc.data();
+      final groupName = groupData['name'] ?? 'Unknown Group';
+      final groupType = groupData['type'] ?? 'split';
+
+      DateTime? createdDate;
+      final rawCreatedAt = groupData['createdAt'];
+      if (rawCreatedAt != null) {
+        if (rawCreatedAt is Timestamp) {
+          createdDate = rawCreatedAt.toDate();
+        } else if (rawCreatedAt is String) {
+          createdDate = DateTime.tryParse(rawCreatedAt);
+        }
+      }
+      if (createdDate != null) {
+        if (createdDate.isAfter(todayStart) && createdDate.isBefore(todayEnd)) {
+          final adminId = groupData['adminId'] ?? '';
+          String creatorName = 'Someone';
+          if (adminId.isNotEmpty) {
+            final adminDoc = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(adminId)
+                .get();
+            creatorName = adminDoc.data()?['name'] ?? 'Someone';
+          }
+
+          const AndroidNotificationDetails groupCreatedDetails = AndroidNotificationDetails(
+            'group_creation_channel',
+            'Group Creation',
+            channelDescription: 'Notifications when new groups are created',
+            importance: Importance.max,
+            priority: Priority.max,
+          );
+          await flutterLocalNotificationsPlugin.show(
+            id: groupDoc.id.hashCode,
+            title: "New Group Created! 👥",
+            body: "$creatorName created group '$groupName'. Tap to view.",
+            notificationDetails: const NotificationDetails(
+              android: groupCreatedDetails,
+              iOS: DarwinNotificationDetails(),
+            ),
+          );
+        }
+      }
+
+      final groupTxsSnapshot = await FirebaseFirestore.instance
+          .collection('groups')
+          .doc(groupDoc.id)
+          .collection('transactions')
+          .get();
+
+      for (var txDoc in groupTxsSnapshot.docs) {
+        final txData = txDoc.data();
+        allTransactions.add(txData);
+
+        DateTime? txDate;
+        final rawTxDate = txData['date'];
+        if (rawTxDate != null) {
+          if (rawTxDate is Timestamp) {
+            txDate = rawTxDate.toDate();
+          } else if (rawTxDate is String) {
+            txDate = DateTime.tryParse(rawTxDate);
+          }
+        }
+        if (txDate != null) {
+          final txUserId = txData['userId'] as String? ?? '';
+          if (txDate.isAfter(todayStart) &&
+              txDate.isBefore(todayEnd) &&
+              txUserId != userId) {
+            groupTransactionsTodayOther.add({
+              ...txData,
+              'groupName': groupName,
+              'groupType': groupType,
+            });
+          }
+        }
+      }
+    }
+
+    for (var tx in groupTransactionsTodayOther) {
+      final groupType = tx['groupType'] as String;
+      if (groupType == 'business') {
+        final txUserId = tx['userId'] as String;
+        final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
+        final description = tx['description'] ?? 'Expense';
+        final groupName = tx['groupName'] ?? 'Group';
+
+        String memberName = 'Someone';
+        if (txUserId.isNotEmpty) {
+          final memberDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(txUserId)
+              .get();
+          memberName = memberDoc.data()?['name'] ?? 'Someone';
+        }
+
+        const AndroidNotificationDetails txDetails = AndroidNotificationDetails(
+          'group_transactions_channel',
+          'Group Transactions',
+          channelDescription: 'Notifications for transactions added by other members',
+          importance: Importance.max,
+          priority: Priority.high,
+        );
+
+        await flutterLocalNotificationsPlugin.show(
+          id: tx['id']?.hashCode ?? now.hashCode,
+          title: "New Shared Expense 💸",
+          body: "$memberName added ₹${amount.toStringAsFixed(2)} for '$description' in '$groupName'.",
+          notificationDetails: const NotificationDetails(
+            android: txDetails
+          ),
+        );
+      }
+    }
+
+    double totalIncome = 0.0;
+    double totalExpense = 0.0;
+    double todaySpent = 0.0;
+
+    for (var data in allTransactions) {
+      DateTime? date;
+      final rawDate = data['date'];
+      if (rawDate != null) {
+        if (rawDate is Timestamp) {
+          date = rawDate.toDate();
+        } else if (rawDate is String) {
+          date = DateTime.tryParse(rawDate);
+        }
+      }
+      if (date == null) continue;
+      double amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
+      final isShared = data['isShared'] as bool? ?? false;
+      final splitWith = List<String>.from(data['splitWith'] ?? []);
+      final splitAmounts = Map<String, dynamic>.from(data['splitAmounts'] ?? {});
+      final isExpense = data['isExpense'] as bool? ?? true;
+
+      if (isShared && splitWith.isNotEmpty) {
+        if (splitWith.contains(userId)) {
+          if (splitAmounts.containsKey(userId)) {
+            amount = (splitAmounts[userId] as num?)?.toDouble() ?? 0.0;
+          } else {
+            amount = amount / splitWith.length;
+          }
+        } else {
+          amount = 0.0;
+        }
+      }
+
+      if (isExpense) {
+        totalExpense += amount;
+        if (date.isAfter(todayStart) && date.isBefore(todayEnd)) {
+          todaySpent += amount;
+        }
+      } else {
+        totalIncome += amount;
+      }
+    }
+
+    final balance = totalIncome - totalExpense;
+
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'evening_summary_channel',
+      'Evening Summary',
+      channelDescription: 'Today spend and available balance summary',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+
+    final String bodyMessage = todaySpent > 0
+        ? "Today's Summary 📊 Today you spent ₹${todaySpent.toStringAsFixed(2)}. Available balance: ₹${balance.toStringAsFixed(2)}."
+        : "You spent ₹0 today! Great job saving money. 💰";
+
+    await flutterLocalNotificationsPlugin.show(
+      id: 20,
+      title: "Today's Summary",
+      body: bodyMessage,
+      notificationDetails: const NotificationDetails(
+        android: androidDetails,
+        iOS: DarwinNotificationDetails(),
+      ),
+    );
+  }
+
 
   static Future<void> _schedule9AMReminder() async {
     final tz.TZDateTime scheduledDate = _nextInstanceOfTime(9, 0);
