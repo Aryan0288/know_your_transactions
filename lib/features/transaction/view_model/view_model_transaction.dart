@@ -7,16 +7,12 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:know_your_expenses/features/helper/notification_helper.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_home.dart';
 import 'package:know_your_expenses/features/transaction/model/model_transaction.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_group.dart';
-// import 'package:cloudinary/cloudinary.dart';
-// import 'package:cloudinary_url_gen/cloudinary.dart';
 
 
-import 'package:cloudinary_api/uploader/cloudinary_uploader.dart';
-import 'package:cloudinary_url_gen/cloudinary.dart';
-import 'package:cloudinary_api/src/request/model/uploader_params.dart';
 
 final transactionViewModelProvider =
     StateNotifierProvider<TransactionViewModel, AsyncValue<void>>((ref) {
@@ -731,6 +727,12 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
             .collection('transactions')
             .add(transaction.toMap());
       }
+
+      await NotificationHelper().showAddExpenseNotification(
+        amount: amount,
+        categoryName: category.name,
+        isExpense: isExpense, // Passes your boolean flag cleanly
+      );
 
       state = const AsyncValue.data(null);
       return true;

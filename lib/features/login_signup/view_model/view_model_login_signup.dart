@@ -3,15 +3,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+import 'package:know_your_expenses/features/helper/notification_helper.dart';
 import 'package:know_your_expenses/features/login_signup/auth_helper.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_home.dart';
 import 'package:know_your_expenses/features/login_signup/model/model_auth.dart';
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
 
-// final errorTextProvider = StateProvider<String?>((ref) {
-//   return null;
-// });
 
 final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
   (ref) => AuthController(ref),
@@ -153,6 +150,8 @@ class AuthController extends StateNotifier<AuthState> {
                 'createdAt': FieldValue.serverTimestamp(),
               });
         }
+
+        await NotificationHelper().showWelcomeNotification(googleUser.displayName ?? user.displayName ?? 'Google User');
       }
 
       state = state.copyWith(isLoading: false, error: null);

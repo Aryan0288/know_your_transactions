@@ -17,8 +17,9 @@ void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     try {
       // 0. Initialize local notifications for background isolate
-      const AndroidInitializationSettings androidSettings =
-          AndroidInitializationSettings('@mipmap/ic_launcher');
+      const AndroidInitializationSettings androidSettings = AndroidInitializationSettings(
+        '@mipmap/ic_launcher',
+      );
       const InitializationSettings settings = InitializationSettings(
         android: androidSettings,
         iOS: DarwinInitializationSettings(),
@@ -173,28 +174,21 @@ Future<void> _handleMorningSummary(String userId) async {
     id: 10,
     title: "Yesterday's Summary 💸",
     body: bodyMessage,
-    notificationDetails: const NotificationDetails(
-      android: androidDetails
-    ),
+    notificationDetails: const NotificationDetails(android: androidDetails),
   );
 }
-
-
 
 class NotificationHelper {
   static Future<void> initialize() async {
     try {
       // 1. Initialize local notifications
-      const AndroidInitializationSettings androidSettings =
-          AndroidInitializationSettings('@mipmap/ic_launcher');
-
-      const InitializationSettings settings = InitializationSettings(
-        android: androidSettings
+      const AndroidInitializationSettings androidSettings = AndroidInitializationSettings(
+        '@mipmap/ic_launcher',
       );
 
-      await flutterLocalNotificationsPlugin.initialize(
-        settings: settings
-      );
+      const InitializationSettings settings = InitializationSettings(android: androidSettings);
+
+      await flutterLocalNotificationsPlugin.initialize(settings: settings);
 
       // Initialize timezone database
       tz.initializeTimeZones();
@@ -208,15 +202,12 @@ class NotificationHelper {
       // Request permissions for Android 13+
       if (Platform.isAndroid) {
         flutterLocalNotificationsPlugin
-            .resolvePlatformSpecificImplementation<
-                AndroidFlutterLocalNotificationsPlugin>()
+            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
             ?.requestNotificationsPermission();
       }
 
       // 2. Initialize WorkManager
-      await Workmanager().initialize(
-        callbackDispatcher,
-      );
+      await Workmanager().initialize(callbackDispatcher);
 
       // Schedule static 9:00 AM notification
       await _schedule9AMReminder();
@@ -346,9 +337,7 @@ class NotificationHelper {
         }
         if (txDate != null) {
           final txUserId = txData['userId'] as String? ?? '';
-          if (txDate.isAfter(todayStart) &&
-              txDate.isBefore(todayEnd) &&
-              txUserId != userId) {
+          if (txDate.isAfter(todayStart) && txDate.isBefore(todayEnd) && txUserId != userId) {
             groupTransactionsTodayOther.add({
               ...txData,
               'groupName': groupName,
@@ -387,10 +376,9 @@ class NotificationHelper {
         await flutterLocalNotificationsPlugin.show(
           id: tx['id']?.hashCode ?? now.hashCode,
           title: "New Shared Expense 💸",
-          body: "$memberName added ₹${amount.toStringAsFixed(2)} for '$description' in '$groupName'.",
-          notificationDetails: const NotificationDetails(
-            android: txDetails
-          ),
+          body:
+              "$memberName added ₹${amount.toStringAsFixed(2)} for '$description' in '$groupName'.",
+          notificationDetails: const NotificationDetails(android: txDetails),
         );
       }
     }
@@ -464,6 +452,70 @@ class NotificationHelper {
   }
 
 
+
+  Future<void> showWelcomeNotification(String userName) async {
+    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'login_channel', // Channel ID
+      'Authentication Alerts', // Channel Name
+      channelDescription: 'Notifications shown when logging in',
+      importance: Importance.max,
+      priority: Priority.max,
+      ticker: 'ticker',
+    );
+
+    const NotificationDetails notificationDetails = NotificationDetails(
+      android: androidDetails
+    );
+
+    await flutterLocalNotificationsPlugin.show(
+      id: 12, // Notification ID
+      title: 'Welcome Back! 👋', // Title
+      body: 'Hi $userName, your Expense Tracker is ready to use.', // Description
+      notificationDetails: notificationDetails,
+    );
+  }
+
+  Future<void> showAddExpenseNotification({
+    required double amount,
+    required String categoryName,
+    required bool isExpense
+  }) async {
+    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'add_expenses_channel', // Channel ID
+      'Add Expenses Alerts', // Channel Name
+      channelDescription: 'Notifications shown when logging in',
+      importance: Importance.max,
+      priority: Priority.max,
+      ticker: 'ticker',
+    );
+
+    const NotificationDetails notificationDetails = NotificationDetails(
+        android: androidDetails
+    );
+
+    final String title = isExpense
+        ? 'Expense Added Successfully! 💸'
+        : 'Income Added Successfully! 💰';
+
+    final String body = isExpense
+        ? 'Spent ₹${amount.toStringAsFixed(2)} on $categoryName.'
+        : 'Received ₹${amount.toStringAsFixed(2)} for $categoryName.';
+
+    await flutterLocalNotificationsPlugin.show(
+      id: DateTime.now().millisecondsSinceEpoch.remainder(100000), // Notification ID
+      title: title, // Title
+      body: body, // Description
+      notificationDetails: notificationDetails,
+    );
+  }
+
+
   static Future<void> _schedule9AMReminder() async {
     final tz.TZDateTime scheduledDate = _nextInstanceOfTime(9, 0);
     await flutterLocalNotificationsPlugin.zonedSchedule(
@@ -488,8 +540,14 @@ class NotificationHelper {
 
   static tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {
     final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
-    tz.TZDateTime scheduledDate =
-        tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+    tz.TZDateTime scheduledDate = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      hour,
+      minute,
+    );
     if (scheduledDate.isBefore(now)) {
       scheduledDate = scheduledDate.add(const Duration(days: 1));
     }
