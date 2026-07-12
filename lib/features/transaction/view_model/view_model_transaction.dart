@@ -300,6 +300,7 @@ class TransactionStats {
 }
 
 final selectedHomeGroupIdFilterProvider = StateProvider<String>((ref) => 'all');
+final homeTransactionTypeFilterProvider = StateProvider<String>((ref) => 'all');
 
 final homeFilteredTransactionsStreamProvider = Provider<AsyncValue<List<TransactionModel>>>((ref) {
   final transactionsAsync = ref.watch(transactionsStreamProvider);

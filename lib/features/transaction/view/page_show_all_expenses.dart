@@ -172,12 +172,31 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                             children: [
                               Consumer(
                                 builder: (context, ref, _) {
-                                  final count =
-                                      ref
-                                          .watch(homeFilteredTransactionsStreamProvider)
-                                          .value
-                                          ?.length ??
-                                      0;
+                                  final transactions = ref.watch(homeFilteredTransactionsStreamProvider).value ?? [];
+                                  final typeFilter = ref.watch(homeTransactionTypeFilterProvider);
+                                  final user = ref.watch(firebaseAuthProvider).currentUser;
+                                  final currentUserId = user?.uid;
+                                  final groups = ref.watch(userGroupsStreamProvider).value ?? [];
+
+                                  final count = transactions.where((t) {
+                                    if (typeFilter == 'all') return true;
+
+                                    bool isExpenseForUser = t.isExpense;
+                                    if (t.groupId != null && currentUserId != null) {
+                                      final group = groups.where((g) => g.id == t.groupId).firstOrNull;
+                                       if (group != null && group.toMap()['type'] == 'wages' &&
+                                          (t.splitWith?.contains(currentUserId) ?? false)) {
+                                        isExpenseForUser = false;
+                                      }
+                                    }
+
+                                    if (typeFilter == 'expense') {
+                                      return isExpenseForUser;
+                                    } else {
+                                      return !isExpenseForUser;
+                                    }
+                                  }).length;
+
                                   return Container(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 14,
@@ -288,6 +307,81 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                     ),
                   ),
 
+                  // Horizontal type filter chips (All / Expenses / Income)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                      child: Consumer(
+                        builder: (context, ref, _) {
+                          final activeFilter = ref.watch(homeTransactionTypeFilterProvider);
+                          Widget buildChip(String label, String value, IconData icon, Color activeColor) {
+                            final isSelected = activeFilter == value;
+                            return GestureDetector(
+                              onTap: () => ref.read(homeTransactionTypeFilterProvider.notifier).state = value,
+                              child: Container(
+                                margin: const EdgeInsets.only(right: 12),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? activeColor.withOpacity(0.12) : Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: isSelected ? activeColor : Colors.grey[200]!,
+                                    width: 1.5,
+                                  ),
+                                  boxShadow: [
+                                    if (isSelected)
+                                      BoxShadow(
+                                        color: activeColor.withOpacity(0.1),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 4),
+                                      )
+                                    else
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.02),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      icon,
+                                      size: 16,
+                                      color: isSelected ? activeColor : Colors.grey[600],
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      label,
+                                      style: GoogleFonts.manrope(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: isSelected ? activeColor : Colors.grey[700],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            physics: const BouncingScrollPhysics(),
+                            child: Row(
+                              children: [
+                                buildChip('All', 'all', Icons.receipt_long_rounded, _kGreen),
+                                buildChip('Expenses', 'expense', Icons.arrow_upward_rounded, Colors.redAccent),
+                                buildChip('Income', 'income', Icons.arrow_downward_rounded, Colors.green),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+
                   // Transaction items
                   Consumer(
                     builder: (context, ref, child) {
@@ -309,14 +403,39 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                               ),
                             );
                           }
-                          if (transactions.isEmpty) {
+
+                          // Filter by transaction type
+                          final typeFilter = ref.watch(homeTransactionTypeFilterProvider);
+                          final currentUserId = user.uid;
+                          final groups = ref.watch(userGroupsStreamProvider).value ?? [];
+
+                          final displayTransactions = transactions.where((t) {
+                            if (typeFilter == 'all') return true;
+
+                            // Determine if this is an expense or income for the user
+                            bool isExpenseForUser = t.isExpense;
+                            if (t.groupId != null) {
+                              final group = groups.where((g) => g.id == t.groupId).firstOrNull;
+                               if (group != null && group.toMap()['type'] == 'wages' &&
+                                  (t.splitWith?.contains(currentUserId) ?? false)) {
+                                isExpenseForUser = false;
+                              }
+                            }
+
+                            if (typeFilter == 'expense') {
+                              return isExpenseForUser;
+                            } else {
+                              return !isExpenseForUser;
+                            }
+                          }).toList();
+
+                          if (displayTransactions.isEmpty) {
                             return const SliverFillRemaining(
                               hasScrollBody: false,
                               child: _EmptyState(
                                 icon: Icons.receipt_long_rounded,
-                                title: 'No Transactions Yet',
-                                subtitle:
-                                    'Your expenses will appear here once you add them',
+                                title: 'No Transactions Found',
+                                subtitle: 'No transactions match the selected filter',
                               ),
                             );
                           }
@@ -325,8 +444,8 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                           final List<_HistoryItem> items = [];
                           String? lastDateStr;
 
-                          for (int i = 0; i < transactions.length; i++) {
-                            final tx = transactions[i];
+                          for (int i = 0; i < displayTransactions.length; i++) {
+                            final tx = displayTransactions[i];
                             final dateStr = _formatHeaderDate(tx.date);
                             if (dateStr != lastDateStr) {
                               items.add(_DateHeaderItem(dateStr));

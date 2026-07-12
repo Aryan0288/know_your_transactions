@@ -11,6 +11,8 @@ import 'package:know_your_expenses/features/helper/notification_helper.dart';
 import 'package:know_your_expenses/features/home/view/page_home.dart';
 import 'package:know_your_expenses/features/login_signup/auth_helper.dart';
 import 'package:know_your_expenses/features/transaction/view/page_expense_transaction.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:know_your_expenses/features/transaction/view/page_passcode_lock.dart';
 
 class SplashPage extends ConsumerStatefulWidget {
   const SplashPage({super.key});
@@ -197,10 +199,23 @@ class _SplashPageState extends ConsumerState<SplashPage>
 
     if (!mounted) return;
 
+    final prefs = await SharedPreferences.getInstance();
+    final isLockEnabled = prefs.getBool('app_lock_enabled') ?? false;
+    final savedPin = prefs.getString('app_lock_pin');
+
+    final Widget finalDestination;
+    if (isLockEnabled && savedPin != null && savedPin.isNotEmpty) {
+      finalDestination = PasscodeLockPage(destination: destination);
+    } else {
+      finalDestination = destination;
+    }
+
+    if (!mounted) return;
+
     Navigator.pushReplacement(
       context,
       PageRouteBuilder(
-        pageBuilder: (_, _, _) => destination,
+        pageBuilder: (_, _, _) => finalDestination,
         transitionDuration: const Duration(milliseconds: 400),
         transitionsBuilder: (_, animation, _, child) {
           return FadeTransition(

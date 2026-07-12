@@ -12,6 +12,7 @@ import 'package:know_your_expenses/features/transaction/view/page_personal_profi
 import 'package:know_your_expenses/features/transaction/view/page_group_settings.dart';
 import 'package:know_your_expenses/features/transaction/view/widgets/widget_export_bottom_sheet.dart';
 import 'package:know_your_expenses/features/transaction/view/page_split_ledger.dart';
+import 'package:know_your_expenses/features/transaction/view/page_app_lock_settings.dart';
 
 class ProfileSectionPage extends ConsumerWidget {
   const ProfileSectionPage({super.key});
@@ -164,6 +165,26 @@ class ProfileSectionPage extends ConsumerWidget {
                               builder: (_) => const ExportBottomSheet(),
                             );
                           }
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _sectionLabel('Security'),
+                  const SizedBox(height: 12),
+                  _MenuCard(
+                    items: [
+                      _MenuItemData(
+                        icon: Icons.lock_outline_rounded,
+                        title: 'App Lock',
+                        subtitle: 'Protect your expenses with a 4-digit PIN',
+                        iconColor: const Color(0xFF429690),
+                        iconBg: const Color(0xFFE6F7F6),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const AppLockSettingsPage()),
+                          );
                         },
                       ),
                     ],

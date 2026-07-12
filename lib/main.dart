@@ -8,6 +8,7 @@ import 'features/splash/page_splash.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:know_your_expenses/features/helper/notification_helper.dart';
+import 'package:know_your_expenses/features/common_widgets/widget_connectivity_wrapper.dart';
 
 Future<void> _backgroundMessageHandler(RemoteMessage message)async{
   await Firebase.initializeApp();
@@ -49,6 +50,9 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E8B57)),
       ),
       home: const SplashPage(),
+      builder: (context, child) {
+        return ConnectivityWrapper(child: child!);
+      },
     );
   }
 }
