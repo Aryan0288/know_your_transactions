@@ -6,10 +6,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:know_your_expenses/features/helper/utils.dart';
 
-final appLockSettingsEnabledProvider = StateProvider.autoDispose<bool>((ref) => false);
-final appLockSettingsSavedPinProvider = StateProvider.autoDispose<String?>((ref) => null);
-final appLockSettingsLoadingProvider = StateProvider.autoDispose<bool>((ref) => true);
-final appLockSettingsPinInputProvider = StateProvider.autoDispose<String>((ref) => '');
+final appLockSettingsEnabledProvider = StateProvider<bool>((ref) => false);
+final appLockSettingsSavedPinProvider = StateProvider<String?>((ref) => null);
+final appLockSettingsLoadingProvider = StateProvider<bool>((ref) => true);
+final appLockSettingsPinInputProvider = StateProvider<String>((ref) => '');
 
 class AppLockSettingsPage extends ConsumerStatefulWidget {
   const AppLockSettingsPage({super.key});

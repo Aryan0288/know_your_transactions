@@ -6,9 +6,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:know_your_expenses/features/helper/utils.dart';
 
-final correctPasscodeProvider = StateProvider.autoDispose<String?>((ref) => null);
-final enteredPasscodeProvider = StateProvider.autoDispose<String>((ref) => '');
-final passcodeLoadingProvider = StateProvider.autoDispose<bool>((ref) => true);
+final correctPasscodeProvider = StateProvider<String?>((ref) => null);
+final enteredPasscodeProvider = StateProvider<String>((ref) => '');
+final passcodeLoadingProvider = StateProvider<bool>((ref) => true);
 
 class PasscodeLockPage extends ConsumerStatefulWidget {
   final Widget destination;
@@ -84,6 +84,9 @@ class _PasscodeLockPageState extends ConsumerState<PasscodeLockPage> with Ticker
 
   Future<void> _verifyPin(String pin) async {
     final correctPin = ref.read(correctPasscodeProvider);
+    print("correctPin is : $correctPin");
+    print("pin is : $pin");
+    
     if (pin == correctPin) {
       if (mounted) {
         Navigator.pushReplacement(
