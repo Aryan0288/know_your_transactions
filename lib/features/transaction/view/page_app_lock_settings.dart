@@ -1,21 +1,24 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:know_your_expenses/features/helper/utils.dart';
 
-class AppLockSettingsPage extends StatefulWidget {
+final appLockSettingsEnabledProvider = StateProvider.autoDispose<bool>((ref) => false);
+final appLockSettingsSavedPinProvider = StateProvider.autoDispose<String?>((ref) => null);
+final appLockSettingsLoadingProvider = StateProvider.autoDispose<bool>((ref) => true);
+final appLockSettingsPinInputProvider = StateProvider.autoDispose<String>((ref) => '');
+
+class AppLockSettingsPage extends ConsumerStatefulWidget {
   const AppLockSettingsPage({super.key});
 
   @override
-  State<AppLockSettingsPage> createState() => _AppLockSettingsPageState();
+  ConsumerState<AppLockSettingsPage> createState() => _AppLockSettingsPageState();
 }
 
-class _AppLockSettingsPageState extends State<AppLockSettingsPage> {
-  bool _isLockEnabled = false;
-  String? _savedPin;
-  bool _isLoading = true;
-
+class _AppLockSettingsPageState extends ConsumerState<AppLockSettingsPage> {
   @override
   void initState() {
     super.initState();
@@ -24,11 +27,9 @@ class _AppLockSettingsPageState extends State<AppLockSettingsPage> {
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _isLockEnabled = prefs.getBool('app_lock_enabled') ?? false;
-      _savedPin = prefs.getString('app_lock_pin');
-      _isLoading = false;
-    });
+    ref.read(appLockSettingsEnabledProvider.notifier).state = prefs.getBool('app_lock_enabled') ?? false;
+    ref.read(appLockSettingsSavedPinProvider.notifier).state = prefs.getString('app_lock_pin');
+    ref.read(appLockSettingsLoadingProvider.notifier).state = false;
   }
 
   Future<void> _toggleLock(bool value) async {
@@ -59,11 +60,9 @@ class _AppLockSettingsPageState extends State<AppLockSettingsPage> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('app_lock_enabled', true);
       await prefs.setString('app_lock_pin', newPin);
-      
-      setState(() {
-        _isLockEnabled = true;
-        _savedPin = newPin;
-      });
+
+      ref.read(appLockSettingsEnabledProvider.notifier).state = true;
+      ref.read(appLockSettingsSavedPinProvider.notifier).state = newPin;
 
       if (mounted) {
         Utils.showSuccessToast(
@@ -73,20 +72,19 @@ class _AppLockSettingsPageState extends State<AppLockSettingsPage> {
       }
     } else {
       // Disabling App Lock: Ask for current PIN
+      final savedPin = ref.read(appLockSettingsSavedPinProvider);
       final pin = await _showPinEntryDialog(
         title: 'Enter PIN to Disable 🔓',
         message: 'Please enter your current 4-digit PIN.',
-        checkCorrectPin: _savedPin,
+        checkCorrectPin: savedPin,
       );
-      
+
       if (pin == null) return; // cancelled or wrong PIN
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('app_lock_enabled', false);
 
-      setState(() {
-        _isLockEnabled = false;
-      });
+      ref.read(appLockSettingsEnabledProvider.notifier).state = false;
 
       if (mounted) {
         Utils.showSuccessToast(
@@ -99,10 +97,11 @@ class _AppLockSettingsPageState extends State<AppLockSettingsPage> {
 
   Future<void> _changePin() async {
     // Current PIN validation
+    final savedPin = ref.read(appLockSettingsSavedPinProvider);
     final currentPin = await _showPinEntryDialog(
       title: 'Current PIN',
       message: 'Please enter your current 4-digit PIN.',
-      checkCorrectPin: _savedPin,
+      checkCorrectPin: savedPin,
     );
     if (currentPin == null) return;
 
@@ -132,9 +131,8 @@ class _AppLockSettingsPageState extends State<AppLockSettingsPage> {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('app_lock_pin', newPin);
-    setState(() {
-      _savedPin = newPin;
-    });
+
+    ref.read(appLockSettingsSavedPinProvider.notifier).state = newPin;
 
     if (mounted) {
       Utils.showSuccessToast(
@@ -165,6 +163,9 @@ class _AppLockSettingsPageState extends State<AppLockSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isLoading = ref.watch(appLockSettingsLoadingProvider);
+    final isLockEnabled = ref.watch(appLockSettingsEnabledProvider);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF2F5F8),
       appBar: AppBar(
@@ -177,7 +178,7 @@ class _AppLockSettingsPageState extends State<AppLockSettingsPage> {
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
       ),
-      body: _isLoading
+      body: isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF429690)))
           : Padding(
               padding: const EdgeInsets.all(24.0),
@@ -208,7 +209,7 @@ class _AppLockSettingsPageState extends State<AppLockSettingsPage> {
                     child: Column(
                       children: [
                         SwitchListTile(
-                          value: _isLockEnabled,
+                          value: isLockEnabled,
                           onChanged: _toggleLock,
                           activeColor: const Color(0xFF429690),
                           title: Text(
@@ -227,7 +228,7 @@ class _AppLockSettingsPageState extends State<AppLockSettingsPage> {
                             ),
                           ),
                         ),
-                        if (_isLockEnabled) ...[
+                        if (isLockEnabled) ...[
                           const Divider(height: 1, indent: 16, endIndent: 16),
                           ListTile(
                             leading: const Icon(Icons.password_rounded, color: Color(0xFF429690)),
@@ -253,7 +254,7 @@ class _AppLockSettingsPageState extends State<AppLockSettingsPage> {
   }
 }
 
-class _PinEntryDialog extends StatefulWidget {
+class _PinEntryDialog extends ConsumerStatefulWidget {
   final String title;
   final String message;
   final String? checkCorrectPin;
@@ -265,17 +266,19 @@ class _PinEntryDialog extends StatefulWidget {
   });
 
   @override
-  State<_PinEntryDialog> createState() => _PinEntryDialogState();
+  ConsumerState<_PinEntryDialog> createState() => _PinEntryDialogState();
 }
 
-class _PinEntryDialogState extends State<_PinEntryDialog> with TickerProviderStateMixin {
-  String _pin = '';
+class _PinEntryDialogState extends ConsumerState<_PinEntryDialog> with TickerProviderStateMixin {
   late AnimationController _shakeController;
   late Animation<double> _shakeAnimation;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(appLockSettingsPinInputProvider.notifier).state = '';
+    });
     _shakeController = AnimationController(
       duration: const Duration(milliseconds: 500),
       vsync: this,
@@ -292,42 +295,39 @@ class _PinEntryDialogState extends State<_PinEntryDialog> with TickerProviderSta
   }
 
   void _onDigitPressed(String digit) {
-    if (_pin.length >= 4) return;
-    setState(() {
-      _pin += digit;
-    });
-    if (_pin.length == 4) {
-      _verifyPin();
+    final currentPin = ref.read(appLockSettingsPinInputProvider);
+    if (currentPin.length >= 4) return;
+
+    final newPin = currentPin + digit;
+    ref.read(appLockSettingsPinInputProvider.notifier).state = newPin;
+
+    if (newPin.length == 4) {
+      _verifyPin(newPin);
     }
   }
 
   void _onBackspace() {
-    if (_pin.isEmpty) return;
-    setState(() {
-      _pin = _pin.substring(0, _pin.length - 1);
-    });
+    final currentPin = ref.read(appLockSettingsPinInputProvider);
+    if (currentPin.isEmpty) return;
+    ref.read(appLockSettingsPinInputProvider.notifier).state = currentPin.substring(0, currentPin.length - 1);
   }
 
-  Future<void> _verifyPin() async {
-    if (widget.checkCorrectPin != null && _pin != widget.checkCorrectPin) {
-      // Shake dots
+  Future<void> _verifyPin(String pin) async {
+    if (widget.checkCorrectPin != null && pin != widget.checkCorrectPin) {
       _shakeController.forward(from: 0.0);
       Utils.showErrorToast(
         context,
         title: "Incorrect PIN",
         description: "Please enter the correct PIN code.",
       );
-      setState(() {
-        _pin = '';
-      });
+      ref.read(appLockSettingsPinInputProvider.notifier).state = '';
       return;
     }
-    // Correct or setting new PIN
-    Navigator.pop(context, _pin);
+    Navigator.pop(context, pin);
   }
 
-  Widget _buildDot(int index) {
-    final hasVal = index < _pin.length;
+  Widget _buildDot(int index, String pin) {
+    final hasVal = index < pin.length;
     return Container(
       width: 16,
       height: 16,
@@ -408,9 +408,14 @@ class _PinEntryDialogState extends State<_PinEntryDialog> with TickerProviderSta
               final dx = sin(_shakeAnimation.value * 2 * pi) * 8;
               return Transform.translate(
                 offset: Offset(dx, 0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(4, _buildDot),
+                child: Consumer(
+                  builder: (context, ref, _) {
+                    final pin = ref.watch(appLockSettingsPinInputProvider);
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(4, (index) => _buildDot(index, pin)),
+                    );
+                  },
                 ),
               );
             },

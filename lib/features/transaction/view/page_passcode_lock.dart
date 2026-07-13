@@ -1,10 +1,16 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:know_your_expenses/features/helper/utils.dart';
 
-class PasscodeLockPage extends StatefulWidget {
+final correctPasscodeProvider = StateProvider.autoDispose<String?>((ref) => null);
+final enteredPasscodeProvider = StateProvider.autoDispose<String>((ref) => '');
+final passcodeLoadingProvider = StateProvider.autoDispose<bool>((ref) => true);
+
+class PasscodeLockPage extends ConsumerStatefulWidget {
   final Widget destination;
 
   const PasscodeLockPage({
@@ -13,14 +19,10 @@ class PasscodeLockPage extends StatefulWidget {
   });
 
   @override
-  State<PasscodeLockPage> createState() => _PasscodeLockPageState();
+  ConsumerState<PasscodeLockPage> createState() => _PasscodeLockPageState();
 }
 
-class _PasscodeLockPageState extends State<PasscodeLockPage> with TickerProviderStateMixin {
-  String _pin = '';
-  String? _correctPin;
-  bool _isLoading = true;
-
+class _PasscodeLockPageState extends ConsumerState<PasscodeLockPage> with TickerProviderStateMixin {
   late AnimationController _shakeController;
   late Animation<double> _shakeAnimation;
 
@@ -49,7 +51,6 @@ class _PasscodeLockPageState extends State<PasscodeLockPage> with TickerProvider
     final pin = prefs.getString('app_lock_pin');
 
     if (!isEnabled || pin == null) {
-      // If lock is disabled or no PIN is saved, bypass to destination immediately
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -59,32 +60,31 @@ class _PasscodeLockPageState extends State<PasscodeLockPage> with TickerProvider
       return;
     }
 
-    setState(() {
-      _correctPin = pin;
-      _isLoading = false;
-    });
+    ref.read(correctPasscodeProvider.notifier).state = pin;
+    ref.read(passcodeLoadingProvider.notifier).state = false;
   }
 
   void _onDigitPressed(String digit) {
-    if (_pin.length >= 4) return;
-    setState(() {
-      _pin += digit;
-    });
-    if (_pin.length == 4) {
-      _verifyPin();
+    final currentPin = ref.read(enteredPasscodeProvider);
+    if (currentPin.length >= 4) return;
+
+    final newPin = currentPin + digit;
+    ref.read(enteredPasscodeProvider.notifier).state = newPin;
+
+    if (newPin.length == 4) {
+      _verifyPin(newPin);
     }
   }
 
   void _onBackspace() {
-    if (_pin.isEmpty) return;
-    setState(() {
-      _pin = _pin.substring(0, _pin.length - 1);
-    });
+    final currentPin = ref.read(enteredPasscodeProvider);
+    if (currentPin.isEmpty) return;
+    ref.read(enteredPasscodeProvider.notifier).state = currentPin.substring(0, currentPin.length - 1);
   }
 
-  Future<void> _verifyPin() async {
-    if (_pin == _correctPin) {
-      // Successful unlocking!
+  Future<void> _verifyPin(String pin) async {
+    final correctPin = ref.read(correctPasscodeProvider);
+    if (pin == correctPin) {
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -102,7 +102,6 @@ class _PasscodeLockPageState extends State<PasscodeLockPage> with TickerProvider
         );
       }
     } else {
-      // Incorrect PIN: vibrate/shake and clear input
       _shakeController.forward(from: 0.0);
       if (mounted) {
         Utils.showErrorToast(
@@ -111,14 +110,12 @@ class _PasscodeLockPageState extends State<PasscodeLockPage> with TickerProvider
           description: "The PIN you entered is incorrect. Please try again.",
         );
       }
-      setState(() {
-        _pin = '';
-      });
+      ref.read(enteredPasscodeProvider.notifier).state = '';
     }
   }
 
-  Widget _buildDot(int index) {
-    final hasVal = index < _pin.length;
+  Widget _buildDot(int index, String pin) {
+    final hasVal = index < pin.length;
     return Container(
       width: 18,
       height: 18,
@@ -161,7 +158,9 @@ class _PasscodeLockPageState extends State<PasscodeLockPage> with TickerProvider
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    final isLoading = ref.watch(passcodeLoadingProvider);
+
+    if (isLoading) {
       return const Scaffold(
         backgroundColor: Color(0xFF2E7D79),
         body: Center(
@@ -233,9 +232,14 @@ class _PasscodeLockPageState extends State<PasscodeLockPage> with TickerProvider
                   final dx = sin(_shakeAnimation.value * 2 * pi) * 8;
                   return Transform.translate(
                     offset: Offset(dx, 0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(4, _buildDot),
+                    child: Consumer(
+                      builder: (context, ref, _) {
+                        final pin = ref.watch(enteredPasscodeProvider);
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(4, (index) => _buildDot(index, pin)),
+                        );
+                      },
                     ),
                   );
                 },

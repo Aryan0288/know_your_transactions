@@ -1,9 +1,34 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class ConnectivityWrapper extends StatefulWidget {
+final connectivityStreamProvider = StreamProvider<dynamic>((ref) {
+  return Connectivity().onConnectivityChanged;
+});
+
+final isConnectedProvider = StateProvider<bool>((ref) {
+  final connectivityAsync = ref.watch(connectivityStreamProvider);
+  return connectivityAsync.when(
+    data: (result) {
+      List<ConnectivityResult> results = [];
+      if (result is List) {
+        results = List<ConnectivityResult>.from(result);
+      } else if (result is ConnectivityResult) {
+        results = [result];
+      }
+      return results.isNotEmpty && !results.contains(ConnectivityResult.none);
+    },
+    loading: () => true, // default to connected while loading
+    error: (_, __) => true,
+  );
+});
+
+final isConnectivityCheckingProvider = StateProvider.autoDispose<bool>((ref) => false);
+
+class ConnectivityWrapper extends ConsumerWidget {
   final Widget child;
 
   const ConnectivityWrapper({
@@ -12,75 +37,22 @@ class ConnectivityWrapper extends StatefulWidget {
   });
 
   @override
-  State<ConnectivityWrapper> createState() => _ConnectivityWrapperState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isConnected = ref.watch(isConnectedProvider);
 
-class _ConnectivityWrapperState extends State<ConnectivityWrapper> {
-  bool _isConnected = true;
-  late StreamSubscription<dynamic> _subscription;
-  final Connectivity _connectivity = Connectivity();
-
-  @override
-  void initState() {
-    super.initState();
-    _checkInitialConnectivity();
-    _subscribeToConnectivity();
-  }
-
-  @override
-  void dispose() {
-    _subscription.cancel();
-    super.dispose();
-  }
-
-  Future<void> _checkInitialConnectivity() async {
-    try {
-      final result = await _connectivity.checkConnectivity();
-      _updateStatus(result);
-    } catch (_) {
-      // Fallback
-    }
-  }
-
-  void _subscribeToConnectivity() {
-    _subscription = _connectivity.onConnectivityChanged.listen((dynamic result) {
-      _updateStatus(result);
-    });
-  }
-
-  void _updateStatus(dynamic result) {
-    List<ConnectivityResult> results = [];
-    if (result is List) {
-      results = List<ConnectivityResult>.from(result);
-    } else if (result is ConnectivityResult) {
-      results = [result];
-    }
-
-    final hasInternet = results.isNotEmpty && !results.contains(ConnectivityResult.none);
-    if (hasInternet != _isConnected) {
-      setState(() {
-        _isConnected = hasInternet;
-      });
-    }
-  }
-
-  Future<void> _retryConnection() async {
-    // Show manual check
-    try {
-      final result = await _connectivity.checkConnectivity();
-      _updateStatus(result);
-    } catch (_) {}
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return Stack(
       children: [
-        widget.child,
-        if (!_isConnected)
+        child,
+        if (!isConnected)
           Positioned.fill(
             child: _OfflineOverlay(
-              onRetry: _retryConnection,
+              onRetry: () async {
+                try {
+                  final result = await Connectivity().checkConnectivity();
+                  final hasInternet = result.isNotEmpty && !result.contains(ConnectivityResult.none);
+                  ref.read(isConnectedProvider.notifier).state = hasInternet;
+                } catch (_) {}
+              },
             ),
           ),
       ],
@@ -88,19 +60,18 @@ class _ConnectivityWrapperState extends State<ConnectivityWrapper> {
   }
 }
 
-class _OfflineOverlay extends StatefulWidget {
+class _OfflineOverlay extends ConsumerStatefulWidget {
   final Future<void> Function() onRetry;
 
   const _OfflineOverlay({required this.onRetry});
 
   @override
-  State<_OfflineOverlay> createState() => _OfflineOverlayState();
+  ConsumerState<_OfflineOverlay> createState() => _OfflineOverlayState();
 }
 
-class _OfflineOverlayState extends State<_OfflineOverlay> with SingleTickerProviderStateMixin {
+class _OfflineOverlayState extends ConsumerState<_OfflineOverlay> with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
-  bool _isChecking = false;
 
   @override
   void initState() {
@@ -122,24 +93,22 @@ class _OfflineOverlayState extends State<_OfflineOverlay> with SingleTickerProvi
   }
 
   Future<void> _handleRetry() async {
-    if (_isChecking) return;
-    setState(() {
-      _isChecking = true;
-    });
+    final isChecking = ref.read(isConnectivityCheckingProvider);
+    if (isChecking) return;
+
+    ref.read(isConnectivityCheckingProvider.notifier).state = true;
 
     // Artificially delay slightly for smooth visual feedback
     await Future.delayed(const Duration(milliseconds: 1000));
     await widget.onRetry();
 
-    if (mounted) {
-      setState(() {
-        _isChecking = false;
-      });
-    }
+    ref.read(isConnectivityCheckingProvider.notifier).state = false;
   }
 
   @override
   Widget build(BuildContext context) {
+    final isChecking = ref.watch(isConnectivityCheckingProvider);
+
     return WillPopScope(
       onWillPop: () async => false, // Prevent physical back button pop
       child: Scaffold(
@@ -224,7 +193,7 @@ class _OfflineOverlayState extends State<_OfflineOverlay> with SingleTickerProvi
                       ],
                     ),
                     child: Center(
-                      child: _isChecking
+                      child: isChecking
                           ? const SizedBox(
                               width: 24,
                               height: 24,
