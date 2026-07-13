@@ -302,6 +302,16 @@ class TransactionStats {
 final selectedHomeGroupIdFilterProvider = StateProvider<String>((ref) => 'all');
 final homeTransactionTypeFilterProvider = StateProvider<String>((ref) => 'all');
 
+final selectedGroupTypeProvider = StateProvider.autoDispose<String>((ref) => 'split');
+
+final exportDateRangeProvider = StateProvider.autoDispose<String>((ref) => 'all');
+final exportTransactionTypeProvider = StateProvider.autoDispose<String>((ref) => 'all');
+final exportFormatProvider = StateProvider.autoDispose<String>((ref) => 'pdf');
+
+final addExpensePaymentModeProvider = StateProvider.autoDispose<String>((ref) => 'cash');
+
+final profileEditModeProvider = StateProvider.autoDispose<bool>((ref) => false);
+
 final homeFilteredTransactionsStreamProvider = Provider<AsyncValue<List<TransactionModel>>>((ref) {
   final transactionsAsync = ref.watch(transactionsStreamProvider);
   final filter = ref.watch(selectedHomeGroupIdFilterProvider);

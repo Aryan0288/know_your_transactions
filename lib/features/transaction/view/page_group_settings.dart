@@ -22,7 +22,6 @@ class GroupSettingsPage extends ConsumerStatefulWidget {
 class _GroupSettingsPageState extends ConsumerState<GroupSettingsPage> {
   final _groupNameController = TextEditingController();
   final _emailController = TextEditingController();
-  String _selectedGroupType = 'split';
 
   @override
   void dispose() {
@@ -38,11 +37,12 @@ class _GroupSettingsPageState extends ConsumerState<GroupSettingsPage> {
       return;
     }
 
-    final success = await ref.read(groupControllerProvider.notifier).createGroup(name, type: _selectedGroupType);
+    final selectedType = ref.read(selectedGroupTypeProvider);
+    final success = await ref.read(groupControllerProvider.notifier).createGroup(name, type: selectedType);
     if (success && mounted) {
       Utils.showSuccessToast(context, title: "Group Created!", description: "You are now the Admin of '$name'.");
       _groupNameController.clear();
-      setState(() => _selectedGroupType = 'split');
+      ref.read(selectedGroupTypeProvider.notifier).state = 'split';
     }
   }
 
@@ -56,10 +56,6 @@ class _GroupSettingsPageState extends ConsumerState<GroupSettingsPage> {
       ),
       builder: (context) => CreateGroupBottomSheet(
         controller: _groupNameController,
-        selectedType: _selectedGroupType,
-        onTypeChanged: (type) {
-          setState(() => _selectedGroupType = type);
-        },
         onCreate: _onCreateGroup,
       ),
     );
@@ -238,48 +234,56 @@ class _GroupSettingsPageState extends ConsumerState<GroupSettingsPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
-              Material(
-                color: Colors.transparent,
-                child: RadioListTile<String>(
-                  title: Text('Split Group', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: Text('Members split expenses between each other.', style: GoogleFonts.manrope(fontSize: 11, color: Colors.grey[600])),
-                  value: 'split',
-                  groupValue: _selectedGroupType,
-                  activeColor: const Color(0xFF2E8B57),
-                  contentPadding: EdgeInsets.zero,
-                  onChanged: (val) {
-                    if (val != null) setState(() => _selectedGroupType = val);
-                  },
-                ),
-              ),
-              Material(
-                color: Colors.transparent,
-                child: RadioListTile<String>(
-                  title: Text('Business Group', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: Text('Only Admin can edit/delete. Members only see their own logs.', style: GoogleFonts.manrope(fontSize: 11, color: Colors.grey[600])),
-                  value: 'business',
-                  groupValue: _selectedGroupType,
-                  activeColor: const Color(0xFF2E8B57),
-                  contentPadding: EdgeInsets.zero,
-                  onChanged: (val) {
-                    if (val != null) setState(() => _selectedGroupType = val);
-                  },
-                ),
-              ),
-              Material(
-                color: Colors.transparent,
-                child: RadioListTile<String>(
-                  title: Text('Wages / Salary Group', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: Text('Admins record salary payments. Members only see their own wages.', style: GoogleFonts.manrope(fontSize: 11, color: Colors.grey[600])),
-                  value: 'wages',
-                  groupValue: _selectedGroupType,
-                  activeColor: const Color(0xFF2E8B57),
-                  contentPadding: EdgeInsets.zero,
-                  onChanged: (val) {
-                    if (val != null) setState(() => _selectedGroupType = val);
-                  },
-                ),
+              Consumer(
+                builder: (context, ref, _) {
+                  final selectedGroupType = ref.watch(selectedGroupTypeProvider);
+                  return Column(
+                    children: [
+                      Material(
+                        color: Colors.transparent,
+                        child: RadioListTile<String>(
+                          title: Text('Split Group', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 14)),
+                          subtitle: Text('Members split expenses between each other.', style: GoogleFonts.manrope(fontSize: 11, color: Colors.grey[600])),
+                          value: 'split',
+                          groupValue: selectedGroupType,
+                          activeColor: const Color(0xFF2E8B57),
+                          contentPadding: EdgeInsets.zero,
+                          onChanged: (val) {
+                            if (val != null) ref.read(selectedGroupTypeProvider.notifier).state = val;
+                          },
+                        ),
+                      ),
+                      Material(
+                        color: Colors.transparent,
+                        child: RadioListTile<String>(
+                          title: Text('Business Group', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 14)),
+                          subtitle: Text('Only Admin can edit/delete. Members only see their own logs.', style: GoogleFonts.manrope(fontSize: 11, color: Colors.grey[600])),
+                          value: 'business',
+                          groupValue: selectedGroupType,
+                          activeColor: const Color(0xFF2E8B57),
+                          contentPadding: EdgeInsets.zero,
+                          onChanged: (val) {
+                            if (val != null) ref.read(selectedGroupTypeProvider.notifier).state = val;
+                          },
+                        ),
+                      ),
+                      Material(
+                        color: Colors.transparent,
+                        child: RadioListTile<String>(
+                          title: Text('Wages / Salary Group', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 14)),
+                          subtitle: Text('Admins record salary payments. Members only see their own wages.', style: GoogleFonts.manrope(fontSize: 11, color: Colors.grey[600])),
+                          value: 'wages',
+                          groupValue: selectedGroupType,
+                          activeColor: const Color(0xFF2E8B57),
+                          contentPadding: EdgeInsets.zero,
+                          onChanged: (val) {
+                            if (val != null) ref.read(selectedGroupTypeProvider.notifier).state = val;
+                          },
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 16),
               SizedBox(

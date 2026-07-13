@@ -1,35 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
 
-class CreateGroupBottomSheet extends StatefulWidget {
+class CreateGroupBottomSheet extends ConsumerWidget {
   final VoidCallback onCreate;
   final TextEditingController controller;
-  final String selectedType;
-  final ValueChanged<String> onTypeChanged;
 
   const CreateGroupBottomSheet({
     super.key,
     required this.onCreate,
     required this.controller,
-    required this.selectedType,
-    required this.onTypeChanged,
   });
 
   @override
-  State<CreateGroupBottomSheet> createState() => _CreateGroupBottomSheetState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final type = ref.watch(selectedGroupTypeProvider);
 
-class _CreateGroupBottomSheetState extends State<CreateGroupBottomSheet> {
-  late String _type;
-
-  @override
-  void initState() {
-    super.initState();
-    _type = widget.selectedType;
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).viewInsets.bottom + 32),
       child: Column(
@@ -58,7 +45,7 @@ class _CreateGroupBottomSheetState extends State<CreateGroupBottomSheet> {
           ),
           const SizedBox(height: 16),
           TextField(
-            controller: widget.controller,
+            controller: controller,
             style: GoogleFonts.manrope(fontSize: 14),
             decoration: InputDecoration(
               hintText: 'Enter Group Name (e.g. Roommates)',
@@ -89,12 +76,11 @@ class _CreateGroupBottomSheetState extends State<CreateGroupBottomSheet> {
               title: Text('Split Expense Group', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 14)),
               subtitle: Text('Equally or custom split bills among members.', style: GoogleFonts.manrope(fontSize: 11, color: Colors.grey[600])),
               value: 'split',
-              groupValue: _type,
+              groupValue: type,
               activeColor: const Color(0xFF2E8B57),
               onChanged: (val) {
                 if (val != null) {
-                  setState(() => _type = val);
-                  widget.onTypeChanged(val);
+                  ref.read(selectedGroupTypeProvider.notifier).state = val;
                 }
               },
             ),
@@ -106,12 +92,11 @@ class _CreateGroupBottomSheetState extends State<CreateGroupBottomSheet> {
               title: Text('Business Expense Group', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 14)),
               subtitle: Text('Only Admin can edit/delete. Members only see transactions.', style: GoogleFonts.manrope(fontSize: 11, color: Colors.grey[600])),
               value: 'business',
-              groupValue: _type,
+              groupValue: type,
               activeColor: const Color(0xFF2E8B57),
               onChanged: (val) {
                 if (val != null) {
-                  setState(() => _type = val);
-                  widget.onTypeChanged(val);
+                  ref.read(selectedGroupTypeProvider.notifier).state = val;
                 }
               },
             ),
@@ -123,12 +108,11 @@ class _CreateGroupBottomSheetState extends State<CreateGroupBottomSheet> {
               title: Text('Wages / Salary Group', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 14)),
               subtitle: Text('Admins record salary payments. Members only see their own wages.', style: GoogleFonts.manrope(fontSize: 11, color: Colors.grey[600])),
               value: 'wages',
-              groupValue: _type,
+              groupValue: type,
               activeColor: const Color(0xFF2E8B57),
               onChanged: (val) {
                 if (val != null) {
-                  setState(() => _type = val);
-                  widget.onTypeChanged(val);
+                  ref.read(selectedGroupTypeProvider.notifier).state = val;
                 }
               },
             ),
@@ -138,7 +122,7 @@ class _CreateGroupBottomSheetState extends State<CreateGroupBottomSheet> {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
-                widget.onCreate();
+                onCreate();
                 Navigator.pop(context);
               },
               style: ElevatedButton.styleFrom(

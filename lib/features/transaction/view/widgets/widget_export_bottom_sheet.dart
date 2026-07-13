@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_group.dart';
@@ -12,34 +13,24 @@ import 'package:know_your_expenses/features/transaction/view/page_pdf_preview.da
 import 'package:know_your_expenses/features/home/model/group_model.dart';
 import 'package:know_your_expenses/features/transaction/view/page_split_ledger.dart';
 
-class ExportBottomSheet extends ConsumerStatefulWidget {
+final exportSelectedSpaceProvider = StateProvider.autoDispose.family<String, String?>((ref, initialSpace) => initialSpace ?? 'all');
+final exportDateRangeOptionProvider = StateProvider.autoDispose<String>((ref) => 'all');
+final exportCustomDateRangeProvider = StateProvider.autoDispose<DateTimeRange?>((ref) => null);
+final exportTransactionTypeProvider = StateProvider.autoDispose<String>((ref) => 'all');
+final exportFormatProvider = StateProvider.autoDispose<String>((ref) => 'pdf');
+
+class ExportBottomSheet extends ConsumerWidget {
   final String? initialGroupId;
   const ExportBottomSheet({super.key, this.initialGroupId});
 
-  @override
-  ConsumerState<ExportBottomSheet> createState() => _ExportBottomSheetState();
-}
-
-class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
   static const Color _kGreen = Color(0xFF2E8B57);
   static const Color _darkText = Color(0xFF1E232A);
 
-  late String _selectedSpace; // 'all', 'personal', or groupId
-  String _dateRangeOption = 'all'; // 'all', 'this_month', 'last_month', 'custom'
-  DateTimeRange? _customDateRange;
-  String _transactionType = 'all'; // 'all', 'expense', 'income'
-  String _exportFormat = 'pdf'; // 'pdf', 'csv'
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedSpace = widget.initialGroupId ?? 'all';
-  }
-
-  Future<void> _selectCustomDateRange(BuildContext context) async {
+  Future<void> _selectCustomDateRange(BuildContext context, WidgetRef ref) async {
+    final customRange = ref.read(exportCustomDateRangeProvider);
     final DateTimeRange? picked = await showDateRangePicker(
       context: context,
-      initialDateRange: _customDateRange,
+      initialDateRange: customRange,
       firstDate: DateTime(2020),
       lastDate: DateTime.now().add(const Duration(days: 1)),
       builder: (context, child) {
@@ -56,17 +47,21 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
       },
     );
     if (picked != null) {
-      setState(() {
-        _customDateRange = picked;
-        _dateRangeOption = 'custom';
-      });
+      ref.read(exportCustomDateRangeProvider.notifier).state = picked;
+      ref.read(exportDateRangeOptionProvider.notifier).state = 'custom';
     }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final groupsAsync = ref.watch(userGroupsStreamProvider);
     final allTransactionsAsync = ref.watch(transactionsStreamProvider);
+
+    final selectedSpace = ref.watch(exportSelectedSpaceProvider(initialGroupId));
+    final dateRangeOption = ref.watch(exportDateRangeOptionProvider);
+    final customDateRange = ref.watch(exportCustomDateRangeProvider);
+    final transactionType = ref.watch(exportTransactionTypeProvider);
+    final exportFormat = ref.watch(exportFormatProvider);
 
     return Container(
       padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).viewInsets.bottom + 32),
@@ -131,7 +126,7 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
-                    value: _selectedSpace,
+                    value: selectedSpace,
                     isExpanded: true,
                     dropdownColor: Colors.white,
                     borderRadius: BorderRadius.circular(12),
@@ -139,9 +134,7 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
                     items: items,
                     onChanged: (val) {
                       if (val != null) {
-                        setState(() {
-                          _selectedSpace = val;
-                        });
+                        ref.read(exportSelectedSpaceProvider(initialGroupId).notifier).state = val;
                       }
                     },
                   ),
@@ -165,29 +158,29 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
           const SizedBox(height: 8),
           Row(
             children: [
-              _buildSegmentChip('All Time', _dateRangeOption == 'all', () {
-                setState(() => _dateRangeOption = 'all');
+              _buildSegmentChip('All Time', dateRangeOption == 'all', () {
+                ref.read(exportDateRangeOptionProvider.notifier).state = 'all';
               }),
               const SizedBox(width: 8),
-              _buildSegmentChip('This Month', _dateRangeOption == 'this_month', () {
-                setState(() => _dateRangeOption = 'this_month');
+              _buildSegmentChip('This Month', dateRangeOption == 'this_month', () {
+                ref.read(exportDateRangeOptionProvider.notifier).state = 'this_month';
               }),
               const SizedBox(width: 8),
-              _buildSegmentChip('Last Month', _dateRangeOption == 'last_month', () {
-                setState(() => _dateRangeOption = 'last_month');
+              _buildSegmentChip('Last Month', dateRangeOption == 'last_month', () {
+                ref.read(exportDateRangeOptionProvider.notifier).state = 'last_month';
               }),
             ],
           ),
           const SizedBox(height: 8),
           GestureDetector(
-            onTap: () => _selectCustomDateRange(context),
+            onTap: () => _selectCustomDateRange(context, ref),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: _dateRangeOption == 'custom' ? const Color(0xFFF3F8F5) : Colors.transparent,
+                color: dateRangeOption == 'custom' ? const Color(0xFFF3F8F5) : Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: _dateRangeOption == 'custom' ? _kGreen.withOpacity(0.3) : Colors.grey[300]!,
+                  color: dateRangeOption == 'custom' ? _kGreen.withOpacity(0.3) : Colors.grey[300]!,
                   width: 1,
                 ),
               ),
@@ -195,19 +188,19 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    _dateRangeOption == 'custom' && _customDateRange != null
-                        ? "${DateFormat('dd MMM').format(_customDateRange!.start)} - ${DateFormat('dd MMM yyyy').format(_customDateRange!.end)}"
+                    dateRangeOption == 'custom' && customDateRange != null
+                        ? "${DateFormat('dd MMM').format(customDateRange.start)} - ${DateFormat('dd MMM yyyy').format(customDateRange.end)}"
                         : "Custom Date Range...",
                     style: GoogleFonts.manrope(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: _dateRangeOption == 'custom' ? _kGreen : Colors.grey[600],
+                      color: dateRangeOption == 'custom' ? _kGreen : Colors.grey[600],
                     ),
                   ),
                   Icon(
                     Icons.calendar_today_rounded,
                     size: 16,
-                    color: _dateRangeOption == 'custom' ? _kGreen : Colors.grey[500],
+                    color: dateRangeOption == 'custom' ? _kGreen : Colors.grey[500],
                   ),
                 ],
               ),
@@ -227,16 +220,16 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
           const SizedBox(height: 8),
           Row(
             children: [
-              _buildSegmentChip('All', _transactionType == 'all', () {
-                setState(() => _transactionType = 'all');
+              _buildSegmentChip('All', transactionType == 'all', () {
+                ref.read(exportTransactionTypeProvider.notifier).state = 'all';
               }),
               const SizedBox(width: 8),
-              _buildSegmentChip('Expenses Only', _transactionType == 'expense', () {
-                setState(() => _transactionType = 'expense');
+              _buildSegmentChip('Expenses Only', transactionType == 'expense', () {
+                ref.read(exportTransactionTypeProvider.notifier).state = 'expense';
               }),
               const SizedBox(width: 8),
-              _buildSegmentChip('Income Only', _transactionType == 'income', () {
-                setState(() => _transactionType = 'income');
+              _buildSegmentChip('Income Only', transactionType == 'income', () {
+                ref.read(exportTransactionTypeProvider.notifier).state = 'income';
               }),
             ],
           ),
@@ -259,8 +252,8 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
                   'PDF Format',
                   'Best for sharing & printing',
                   Icons.picture_as_pdf_rounded,
-                  _exportFormat == 'pdf',
-                  () => setState(() => _exportFormat = 'pdf'),
+                  exportFormat == 'pdf',
+                  () => ref.read(exportFormatProvider.notifier).state = 'pdf',
                 ),
               ),
               const SizedBox(width: 12),
@@ -269,8 +262,8 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
                   'CSV Format',
                   'Best for Excel / Google Sheets',
                   Icons.table_rows_rounded,
-                  _exportFormat == 'csv',
-                  () => setState(() => _exportFormat = 'csv'),
+                  exportFormat == 'csv',
+                  () => ref.read(exportFormatProvider.notifier).state = 'csv',
                 ),
               ),
             ],
@@ -298,31 +291,31 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
                 // 2. Apply Filters
                 // A. Space filter
                 var filtered = allTransactions;
-                if (_selectedSpace == 'personal') {
+                if (selectedSpace == 'personal') {
                   filtered = filtered.where((t) => !t.isShared || t.groupId == null).toList();
-                } else if (_selectedSpace != 'all') {
-                  filtered = filtered.where((t) => t.isShared && t.groupId == _selectedSpace).toList();
+                } else if (selectedSpace != 'all') {
+                  filtered = filtered.where((t) => t.isShared && t.groupId == selectedSpace).toList();
                 }
 
                 // B. Date range filter
                 final now = DateTime.now();
-                if (_dateRangeOption == 'this_month') {
+                if (dateRangeOption == 'this_month') {
                   final start = DateTime(now.year, now.month, 1);
                   filtered = filtered.where((t) => t.date.isAfter(start) || t.date.isAtSameMomentAs(start)).toList();
-                } else if (_dateRangeOption == 'last_month') {
+                } else if (dateRangeOption == 'last_month') {
                   final start = DateTime(now.year, now.month - 1, 1);
                   final end = DateTime(now.year, now.month, 1).subtract(const Duration(milliseconds: 1));
                   filtered = filtered.where((t) => t.date.isAfter(start) && t.date.isBefore(end)).toList();
-                } else if (_dateRangeOption == 'custom' && _customDateRange != null) {
-                  final start = DateTime(_customDateRange!.start.year, _customDateRange!.start.month, _customDateRange!.start.day, 0, 0, 0);
-                  final end = DateTime(_customDateRange!.end.year, _customDateRange!.end.month, _customDateRange!.end.day, 23, 59, 59);
+                } else if (dateRangeOption == 'custom' && customDateRange != null) {
+                  final start = DateTime(customDateRange.start.year, customDateRange.start.month, customDateRange.start.day, 0, 0, 0);
+                  final end = DateTime(customDateRange.end.year, customDateRange.end.month, customDateRange.end.day, 23, 59, 59);
                   filtered = filtered.where((t) => t.date.isAfter(start) && t.date.isBefore(end)).toList();
                 }
 
                 // C. Type filter
-                if (_transactionType == 'expense') {
+                if (transactionType == 'expense') {
                   filtered = filtered.where((t) => t.isExpense).toList();
-                } else if (_transactionType == 'income') {
+                } else if (transactionType == 'income') {
                   filtered = filtered.where((t) => !t.isExpense).toList();
                 }
 
@@ -333,12 +326,12 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
 
                 // 3. Resolve title
                 String title = "All Spaces Combined";
-                if (_selectedSpace == 'personal') {
+                if (selectedSpace == 'personal') {
                   title = "Personal Space";
-                } else if (_selectedSpace != 'all') {
+                } else if (selectedSpace != 'all') {
                   final groups = ref.read(userGroupsStreamProvider).value ?? [];
                   final grp = groups.firstWhere(
-                    (g) => g.id == _selectedSpace,
+                    (g) => g.id == selectedSpace,
                     orElse: () => GroupModel(id: '', name: 'Group', adminId: '', members: [], memberLimits: {}, type: 'split'),
                   );
                   title = grp.name;
@@ -351,7 +344,7 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
                 final currentUserId = ref.read(firebaseAuthProvider).currentUser?.uid ?? '';
                 final memberNames = ref.read(allGroupsMembersProvider).value ?? {};
 
-                if (_exportFormat == 'csv') {
+                if (exportFormat == 'csv') {
                   await PdfHelper.exportToCsv(
                     transactions: filtered,
                     title: title,
@@ -361,9 +354,9 @@ class _ExportBottomSheetState extends ConsumerState<ExportBottomSheet> {
                 } else {
                   // PDF Format
                   Uint8List bytes;
-                  if (_selectedSpace != 'all' && _selectedSpace != 'personal') {
+                  if (selectedSpace != 'all' && selectedSpace != 'personal') {
                     final groups = ref.read(userGroupsStreamProvider).value ?? [];
-                    final group = groups.firstWhere((g) => g.id == _selectedSpace);
+                    final group = groups.firstWhere((g) => g.id == selectedSpace);
                     bytes = await PdfHelper.generateGroupStatementBytes(
                       group: group,
                       transactions: filtered,

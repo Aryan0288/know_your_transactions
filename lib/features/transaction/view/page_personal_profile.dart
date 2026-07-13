@@ -15,7 +15,6 @@ class PersonalProfilePage extends ConsumerStatefulWidget {
 }
 
 class _PersonalProfilePageState extends ConsumerState<PersonalProfilePage> {
-  bool _isEditing = false;
   bool _initialized = false;
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
@@ -121,6 +120,7 @@ class _PersonalProfilePageState extends ConsumerState<PersonalProfilePage> {
             _phoneController.text = userPhone == 'No phone number' ? '' : userPhone;
             _initialized = true;
           }
+          final isEditing = ref.watch(profileEditModeProvider);
 
           return CustomScrollView(
             slivers: [
@@ -139,23 +139,21 @@ class _PersonalProfilePageState extends ConsumerState<PersonalProfilePage> {
                   ),
                 ),
                 actions: [
-                  if (_isEditing)
+                  if (isEditing)
                     IconButton(
                       icon: const Icon(Icons.close_rounded, color: Colors.white),
                       tooltip: 'Cancel',
                       onPressed: () {
-                        setState(() {
-                          _isEditing = false;
-                          _nameController.text = userName;
-                          _phoneController.text = userPhone == 'No phone number' ? '' : userPhone;
-                        });
+                        ref.read(profileEditModeProvider.notifier).state = false;
+                        _nameController.text = userName;
+                        _phoneController.text = userPhone == 'No phone number' ? '' : userPhone;
                       },
                     ),
                   IconButton(
-                    icon: Icon(_isEditing ? Icons.check_rounded : Icons.edit_rounded, color: Colors.white),
-                    tooltip: _isEditing ? 'Save Changes' : 'Edit Profile',
+                    icon: Icon(isEditing ? Icons.check_rounded : Icons.edit_rounded, color: Colors.white),
+                    tooltip: isEditing ? 'Save Changes' : 'Edit Profile',
                     onPressed: () async {
-                      if (_isEditing) {
+                      if (isEditing) {
                         final nameInput = _nameController.text.trim();
                         final phoneInput = _phoneController.text.trim();
                         if (nameInput.isEmpty) {
@@ -171,7 +169,7 @@ class _PersonalProfilePageState extends ConsumerState<PersonalProfilePage> {
                         if (mounted) {
                           Navigator.pop(context); // Dismiss loading dialog
                           if (success) {
-                            setState(() => _isEditing = false);
+                            ref.read(profileEditModeProvider.notifier).state = false;
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text('Profile updated successfully!')),
                             );
@@ -182,7 +180,7 @@ class _PersonalProfilePageState extends ConsumerState<PersonalProfilePage> {
                           }
                         }
                       } else {
-                        setState(() => _isEditing = true);
+                        ref.read(profileEditModeProvider.notifier).state = true;
                       }
                     },
                   ),
@@ -219,13 +217,13 @@ class _PersonalProfilePageState extends ConsumerState<PersonalProfilePage> {
                       _sectionLabel('Profile Details'),
                       const SizedBox(height: 12),
                       _buildInfoCard([
-                        _isEditing
+                        isEditing
                             ? _buildEditProfileRow('Full Name', _nameController, Icons.person_outline)
                             : _buildProfileRow('Full Name', userName, Icons.person_outline),
                         _buildDivider(),
                         _buildProfileRow('Email Address', userEmail, Icons.email_outlined),
                         _buildDivider(),
-                        _isEditing
+                        isEditing
                             ? _buildEditProfileRow('Phone Number', _phoneController, Icons.phone_outlined, keyboardType: TextInputType.phone)
                             : _buildProfileRow('Phone Number', userPhone.isEmpty ? 'No phone number' : userPhone, Icons.phone_outlined),
                       ]),

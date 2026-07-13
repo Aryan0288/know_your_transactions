@@ -45,12 +45,14 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
   late final ValueNotifier<bool> isExpenseNotifier;
   final Map<String, TextEditingController> _memberSplitControllers = {};
   String? _lastInitializedGroupId;
-  late String _paymentMode;
 
   @override
   void initState() {
     super.initState();
-    _paymentMode = widget.initialPaymentMode ?? (widget.editTransaction?.paymentMode ?? 'cash');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(addExpensePaymentModeProvider.notifier).state =
+          widget.initialPaymentMode ?? (widget.editTransaction?.paymentMode ?? 'cash');
+    });
     selectedCategoryNotifier = ValueNotifier<CategoryModel?>(
       widget.editTransaction != null
           ? CategoryModel(
@@ -530,100 +532,105 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: InkWell(
-                            onTap: () {
-                              setState(() => _paymentMode = 'cash');
-                            },
-                            borderRadius: BorderRadius.circular(16),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              decoration: BoxDecoration(
-                                color: _paymentMode == 'cash'
-                                    ? Colors.amber.withOpacity(0.12)
-                                    : Colors.white,
-                                border: Border.all(
-                                  color: _paymentMode == 'cash'
-                                      ? Colors.amber[700]!
-                                      : Colors.grey[300]!,
-                                  width: 1.5,
-                                ),
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final paymentMode = ref.watch(addExpensePaymentModeProvider);
+                        return Row(
+                          children: [
+                            Expanded(
+                              child: InkWell(
+                                onTap: () {
+                                  ref.read(addExpensePaymentModeProvider.notifier).state = 'cash';
+                                },
                                 borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.money_rounded,
-                                    color: _paymentMode == 'cash'
-                                        ? Colors.amber[800]
-                                        : Colors.grey[600],
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Cash',
-                                    style: GoogleFonts.manrope(
-                                      fontWeight: FontWeight.bold,
-                                      color: _paymentMode == 'cash'
-                                          ? Colors.amber[900]
-                                          : Colors.grey[700],
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: paymentMode == 'cash'
+                                        ? Colors.amber.withOpacity(0.12)
+                                        : Colors.white,
+                                    border: Border.all(
+                                      color: paymentMode == 'cash'
+                                          ? Colors.amber[700]!
+                                          : Colors.grey[300]!,
+                                      width: 1.5,
                                     ),
+                                    borderRadius: BorderRadius.circular(16),
                                   ),
-                                ],
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.money_rounded,
+                                        color: paymentMode == 'cash'
+                                            ? Colors.amber[800]
+                                            : Colors.grey[600],
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Cash',
+                                        style: GoogleFonts.manrope(
+                                          fontWeight: FontWeight.bold,
+                                          color: paymentMode == 'cash'
+                                              ? Colors.amber[900]
+                                              : Colors.grey[700],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: InkWell(
-                            onTap: () {
-                              setState(() => _paymentMode = 'online');
-                            },
-                            borderRadius: BorderRadius.circular(16),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              decoration: BoxDecoration(
-                                color: _paymentMode == 'online'
-                                    ? Colors.blue.withOpacity(0.1)
-                                    : Colors.white,
-                                border: Border.all(
-                                  color: _paymentMode == 'online'
-                                      ? Colors.blue
-                                      : Colors.grey[300]!,
-                                  width: 1.5,
-                                ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: InkWell(
+                                onTap: () {
+                                  ref.read(addExpensePaymentModeProvider.notifier).state = 'online';
+                                },
                                 borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.payment_rounded,
-                                    color: _paymentMode == 'online'
-                                        ? Colors.blue
-                                        : Colors.grey[600],
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Online',
-                                    style: GoogleFonts.manrope(
-                                      fontWeight: FontWeight.bold,
-                                      color: _paymentMode == 'online'
-                                          ? Colors.blue[800]
-                                          : Colors.grey[700],
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: paymentMode == 'online'
+                                        ? Colors.blue.withOpacity(0.1)
+                                        : Colors.white,
+                                    border: Border.all(
+                                      color: paymentMode == 'online'
+                                          ? Colors.blue
+                                          : Colors.grey[300]!,
+                                      width: 1.5,
                                     ),
+                                    borderRadius: BorderRadius.circular(16),
                                   ),
-                                ],
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.payment_rounded,
+                                        color: paymentMode == 'online'
+                                            ? Colors.blue
+                                            : Colors.grey[600],
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Online',
+                                        style: GoogleFonts.manrope(
+                                          fontWeight: FontWeight.bold,
+                                          color: paymentMode == 'online'
+                                              ? Colors.blue[800]
+                                              : Colors.grey[700],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                      ],
+                          ],
+                        );
+                      },
                     ),
                     const SizedBox(height: 24),
                   ] else ...[
@@ -1521,6 +1528,7 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                         final proceed = await showDialog<bool>(
                           context: context,
                           builder: (context) {
+                            final currentPaymentMode = ref.read(addExpensePaymentModeProvider);
                             return AlertDialog(
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                               title: Text(
@@ -1528,7 +1536,7 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                                 style: GoogleFonts.manrope(fontWeight: FontWeight.bold),
                               ),
                               content: Text(
-                                'Are you sure you want to record a wages payment of ₹${(double.tryParse(amountController.text) ?? 0.0).toStringAsFixed(2)} to $employeeName via ${_paymentMode.toUpperCase()}?',
+                                'Are you sure you want to record a wages payment of ₹${(double.tryParse(amountController.text) ?? 0.0).toStringAsFixed(2)} to $employeeName via ${currentPaymentMode.toUpperCase()}?',
                                 style: GoogleFonts.manrope(fontSize: 14),
                               ),
                               actions: [
@@ -1551,6 +1559,7 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                         if (proceed != true) return;
                       }
 
+                      final currentPaymentMode = ref.read(addExpensePaymentModeProvider);
                       final success = isEdit
                           ? await ref
                               .read(transactionViewModelProvider.notifier)
@@ -1565,7 +1574,7 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                                 splitWith: (shared && (!isBusinessGroup || isWagesGroup)) ? splitWith : null,
                                 targetGroupId: targetGroupId,
                                 splitAmounts: splitAmounts,
-                                paymentMode: isWagesGroup ? _paymentMode : null,
+                                paymentMode: isWagesGroup ? currentPaymentMode : null,
                               )
                           : await ref
                               .read(transactionViewModelProvider.notifier)
@@ -1579,7 +1588,7 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                                 splitWith: (shared && (!isBusinessGroup || isWagesGroup)) ? splitWith : null,
                                 targetGroupId: targetGroupId,
                                 splitAmounts: splitAmounts,
-                                paymentMode: isWagesGroup ? _paymentMode : null,
+                                paymentMode: isWagesGroup ? currentPaymentMode : null,
                               );
 
                       if (success && mounted) {
