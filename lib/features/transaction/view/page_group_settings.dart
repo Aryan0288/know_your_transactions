@@ -267,6 +267,20 @@ class _GroupSettingsPageState extends ConsumerState<GroupSettingsPage> {
                   },
                 ),
               ),
+              Material(
+                color: Colors.transparent,
+                child: RadioListTile<String>(
+                  title: Text('Wages / Salary Group', style: GoogleFonts.manrope(fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: Text('Admins record salary payments. Members only see their own wages.', style: GoogleFonts.manrope(fontSize: 11, color: Colors.grey[600])),
+                  value: 'wages',
+                  groupValue: _selectedGroupType,
+                  activeColor: const Color(0xFF2E8B57),
+                  contentPadding: EdgeInsets.zero,
+                  onChanged: (val) {
+                    if (val != null) setState(() => _selectedGroupType = val);
+                  },
+                ),
+              ),
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
