@@ -13,6 +13,7 @@ import 'package:know_your_expenses/features/transaction/view/page_group_settings
 import 'package:know_your_expenses/features/transaction/view/widgets/widget_export_bottom_sheet.dart';
 import 'package:know_your_expenses/features/transaction/view/page_split_ledger.dart';
 import 'package:know_your_expenses/features/transaction/view/page_app_lock_settings.dart';
+import 'package:know_your_expenses/features/auto_sms/view/page_sms_settings.dart';
 
 class ProfileSectionPage extends ConsumerWidget {
   const ProfileSectionPage({super.key});
@@ -184,6 +185,19 @@ class ProfileSectionPage extends ConsumerWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(builder: (context) => const AppLockSettingsPage()),
+                          );
+                        },
+                      ),
+                      _MenuItemData(
+                        icon: Icons.mark_email_read_rounded,
+                        title: 'Auto SMS Expenses',
+                        subtitle: 'Automatically detect bank debit & credit SMS',
+                        iconColor: const Color(0xFF429690),
+                        iconBg: const Color(0xFFE6F7F6),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const PageSmsSettings()),
                           );
                         },
                       ),

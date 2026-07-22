@@ -19,6 +19,8 @@ import 'package:know_your_expenses/features/transaction/view/dialog_transaction_
 import 'package:know_your_expenses/features/home/view_model/view_model_group.dart';
 import 'package:know_your_expenses/features/common_widgets/closable_banner_ad.dart';
 import 'package:know_your_expenses/features/transaction/view/widgets/widget_home_filter_bottom_sheet.dart';
+import 'package:know_your_expenses/features/auto_sms/view/widgets/widget_pending_ledger_banner.dart';
+import 'package:know_your_expenses/features/auto_sms/view/widgets/widget_auto_sms_feature_guide_banner.dart';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 const _kGreen = Color(0xFF429690);
@@ -305,6 +307,14 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                         ],
                       ),
                     ),
+                  ),
+
+                  const SliverToBoxAdapter(
+                    child: WidgetAutoSmsFeatureGuideBanner(),
+                  ),
+
+                  const SliverToBoxAdapter(
+                    child: WidgetPendingLedgerBanner(),
                   ),
 
                   // Horizontal type filter chips (All / Expenses / Income)
@@ -845,7 +855,7 @@ class _BalanceCard extends StatelessWidget {
                   title: 'Income',
                   amount: stats.totalIncome,
                   icon: Icons.arrow_downward_rounded,
-                  iconBg: Colors.greenAccent.shade400,
+                  iconBg: const Color(0xFF2E7D32),
                 ),
               ),
               Container(
@@ -853,12 +863,13 @@ class _BalanceCard extends StatelessWidget {
                 height: 44,
                 color: Colors.white.withOpacity(0.15),
               ),
+              SizedBox(width: 8),
               Expanded(
                 child: _IncomeExpenseCard(
                   title: 'Expenses',
                   amount: stats.totalExpense,
                   icon: Icons.arrow_upward_rounded,
-                  iconBg: Colors.redAccent.shade200,
+                  iconBg: const Color(0xFFE57373),
                 ),
               ),
             ],
@@ -1136,7 +1147,7 @@ class _IncomeExpenseCard extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: iconBg.withOpacity(0.2),
+            color: iconBg,
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: Colors.white, size: 16),

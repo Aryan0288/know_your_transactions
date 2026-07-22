@@ -515,6 +515,25 @@ class NotificationHelper {
     );
   }
 
+  static Future<void> showLocalNotification({
+    required String title,
+    required String body,
+  }) async {
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'auto_sms_channel',
+      'Auto SMS Expenses',
+      channelDescription: 'Notifications for auto-detected SMS expenses',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+    await flutterLocalNotificationsPlugin.show(
+      id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title: title,
+      body: body,
+      notificationDetails: const NotificationDetails(android: androidDetails),
+    );
+  }
+
 
   static Future<void> _schedule9AMReminder() async {
     final tz.TZDateTime scheduledDate = _nextInstanceOfTime(9, 0);

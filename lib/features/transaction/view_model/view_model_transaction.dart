@@ -251,24 +251,13 @@ final transactionStatsProvider = Provider<TransactionStats>((ref) {
 
   for (var t in transactions) {
     double amount = t.amount;
-    if (t.isShared && t.splitWith != null && t.splitWith!.isNotEmpty) {
-      if (currentUserId != null && t.splitWith!.contains(currentUserId)) {
-        if (t.splitAmounts != null && t.splitAmounts!.containsKey(currentUserId)) {
-          amount = t.splitAmounts![currentUserId]!;
-        } else {
-          amount = t.amount / t.splitWith!.length;
-        }
-      } else {
-        amount = 0.0;
-      }
-    }
 
     // Wages received by employee = income, not expense
     bool isExpenseForUser = t.isExpense;
     if (t.groupId != null && currentUserId != null) {
       final group = groups.where((g) => g.id == t.groupId).firstOrNull;
       if (group != null && group.toMap()['type'] == 'wages' &&
-          t.splitWith != null && t.splitWith!.contains(currentUserId)) {
+          (t.splitWith?.contains(currentUserId) ?? false)) {
         isExpenseForUser = false;
       }
     }
@@ -281,7 +270,7 @@ final transactionStatsProvider = Provider<TransactionStats>((ref) {
   }
 
   return TransactionStats(
-    totalBalance: totalExpense,
+    totalBalance: totalIncome - totalExpense,
     totalIncome: totalIncome,
     totalExpense: totalExpense,
   );
@@ -338,24 +327,13 @@ final homeFilteredTransactionStatsProvider = Provider<TransactionStats>((ref) {
 
   for (var t in transactions) {
     double amount = t.amount;
-    if (t.isShared && t.splitWith != null && t.splitWith!.isNotEmpty) {
-      if (currentUserId != null && t.splitWith!.contains(currentUserId)) {
-        if (t.splitAmounts != null && t.splitAmounts!.containsKey(currentUserId)) {
-          amount = t.splitAmounts![currentUserId]!;
-        } else {
-          amount = t.amount / t.splitWith!.length;
-        }
-      } else {
-        amount = 0.0;
-      }
-    }
 
     // Wages received by employee = income, not expense
     bool isExpenseForUser = t.isExpense;
     if (t.groupId != null && currentUserId != null) {
       final group = groups.where((g) => g.id == t.groupId).firstOrNull;
       if (group != null && group.toMap()['type'] == 'wages' &&
-          t.splitWith != null && t.splitWith!.contains(currentUserId)) {
+          (t.splitWith?.contains(currentUserId) ?? false)) {
         isExpenseForUser = false;
       }
     }

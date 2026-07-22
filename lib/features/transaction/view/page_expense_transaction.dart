@@ -18,6 +18,7 @@ import 'package:know_your_expenses/features/transaction/view_model/view_model_tr
 import 'package:know_your_expenses/features/helper/shake_detector.dart';
 import 'package:know_your_expenses/features/transaction/view/dialog_quick_add_amount.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_group.dart';
+import 'package:know_your_expenses/features/auto_sms/service/auto_sms_service.dart';
 
 // ─── Colours ─────────────────────────────────────────────────────────────────
 const _kGreen = Color(0xFF2E8B57);
@@ -98,6 +99,9 @@ class _AddExpensePageHomePageState extends ConsumerState<AddExpensePageHomePage>
       },
     );
     _shakeDetector.startListening();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AutoSmsService.initializeOnAppStart(ref);
+    });
   }
 
   @override
