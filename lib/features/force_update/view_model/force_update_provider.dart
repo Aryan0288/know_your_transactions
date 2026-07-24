@@ -29,15 +29,16 @@ class ForceUpdateState {
 final forceUpdateProvider = FutureProvider<ForceUpdateState>((ref) async {
   final repository = ref.read(forceUpdateRepositoryProvider);
 
-  final config = await repository.fetchVersionConfig();
+  final packageInfo = await PackageInfo.fromPlatform();
+  final currentVersion = packageInfo.version; // e.g. "1.0.0"
+  final packageName = packageInfo.packageName;
+
+  final config = await repository.fetchVersionConfig(packageName: packageName);
 
   // If Firestore is unreachable or document missing → no forced update
   if (config == null) {
     return const ForceUpdateState(isUpdateRequired: false);
   }
-
-  final packageInfo = await PackageInfo.fromPlatform();
-  final currentVersion = packageInfo.version; // e.g. "1.0.0"
 
   final isRequired = _isUpdateRequired(
     current: currentVersion,

@@ -10,7 +10,7 @@ class ForceUpdateRepository {
   /// Fetches the version config from Firestore.
   /// Returns null if the document doesn't exist or on any network error
   /// (graceful fallback — app should proceed normally if Firestore is unreachable).
-  Future<VersionConfigModel?> fetchVersionConfig() async {
+  Future<VersionConfigModel?> fetchVersionConfig({String? packageName}) async {
     try {
       final doc = await _firestore
           .collection('app_config')
@@ -19,7 +19,7 @@ class ForceUpdateRepository {
 
       if (!doc.exists || doc.data() == null) return null;
 
-      return VersionConfigModel.fromMap(doc.data()!);
+      return VersionConfigModel.fromMap(doc.data()!, packageName: packageName);
     } catch (_) {
       // Graceful fallback: network error, offline, Firestore unavailable, etc.
       return null;
