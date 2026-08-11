@@ -19,6 +19,7 @@ import 'package:know_your_expenses/features/helper/shake_detector.dart';
 import 'package:know_your_expenses/features/transaction/view/dialog_quick_add_amount.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_group.dart';
 import 'package:know_your_expenses/features/auto_sms/service/auto_sms_service.dart';
+import 'package:know_your_expenses/features/auto_sms/view_model/auto_sms_provider.dart';
 
 // ─── Colours ─────────────────────────────────────────────────────────────────
 const _kGreen = Color(0xFF2E8B57);
@@ -75,7 +76,8 @@ class AddExpensePageHomePage extends ConsumerStatefulWidget {
   ConsumerState<AddExpensePageHomePage> createState() => _AddExpensePageHomePageState();
 }
 
-class _AddExpensePageHomePageState extends ConsumerState<AddExpensePageHomePage> {
+class _AddExpensePageHomePageState extends ConsumerState<AddExpensePageHomePage>
+    with WidgetsBindingObserver {
   late ShakeDetector _shakeDetector;
 
   final pages = [
@@ -89,6 +91,7 @@ class _AddExpensePageHomePageState extends ConsumerState<AddExpensePageHomePage>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _shakeDetector = ShakeDetector(
       onShake: () {
         HapticFeedback.vibrate();
@@ -105,7 +108,16 @@ class _AddExpensePageHomePageState extends ConsumerState<AddExpensePageHomePage>
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // When app comes back to foreground, reload SMS written by native Kotlin receiver
+    if (state == AppLifecycleState.resumed) {
+      ref.read(pendingSmsListProvider.notifier).reloadFromPrefs();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _shakeDetector.stopListening();
     super.dispose();
   }
@@ -374,7 +386,7 @@ class _AwesomeBottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + MediaQuery.of(context).padding.bottom),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(32),
         child: BackdropFilter(

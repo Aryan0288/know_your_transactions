@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:telephony/telephony.dart';
+import 'package:know_your_expenses/features/auto_sms/service/auto_sms_service.dart';
 import 'package:know_your_expenses/features/auto_sms/view_model/auto_sms_provider.dart';
 import 'package:know_your_expenses/features/auto_sms/view/widgets/widget_auto_fill_ledger_sheet.dart';
 import 'package:know_your_expenses/features/helper/utils.dart';
@@ -145,14 +146,9 @@ class _PageSmsSettingsState extends ConsumerState<PageSmsSettings> {
           }
         },
         listenInBackground: true,
-        onBackgroundMessage: _backGroundSmsHandler,
+        onBackgroundMessage: backgroundSmsHandler,
       );
     } catch (_) {}
-  }
-
-  @pragma('vm:entry-point')
-  static void _backGroundSmsHandler(SmsMessage message) {
-    // Handled natively by Telephony background receiver
   }
 
   @override
@@ -459,7 +455,13 @@ class _PageSmsSettingsState extends ConsumerState<PageSmsSettings> {
                                       borderRadius: BorderRadius.circular(10),
                                       onTap: () {
                                         HapticFeedback.mediumImpact();
-                                        ref.read(pendingSmsListProvider.notifier).discardPendingSms(item.id);
+                                        CustomDialogs.showDiscardSmsDialog(
+                                          context,
+                                          onConfirm: () {
+                                            ref.read(pendingSmsListProvider.notifier).discardPendingSms(item.id);
+                                            Utils.showSuccessToast(context, title: 'Transaction Discarded');
+                                          },
+                                        );
                                       },
                                       child: Container(
                                         padding: const EdgeInsets.all(8),

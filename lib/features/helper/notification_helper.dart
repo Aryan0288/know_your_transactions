@@ -519,6 +519,13 @@ class NotificationHelper {
     required String title,
     required String body,
   }) async {
+    try {
+      const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      await flutterLocalNotificationsPlugin.initialize(
+        settings: const InitializationSettings(android: androidSettings),
+      );
+    } catch (_) {}
+
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'auto_sms_channel',
       'Auto SMS Expenses',

@@ -8,6 +8,7 @@ import 'package:know_your_expenses/features/home/view_model/view_model_group.dar
 import 'package:know_your_expenses/features/transaction/model/model_transaction.dart';
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
 import 'package:know_your_expenses/features/helper/utils.dart';
+import 'package:know_your_expenses/core/widgets/custom_dialogs.dart';
 
 class WidgetAutoFillLedgerSheet extends ConsumerStatefulWidget {
   final ModelPendingSms pendingSms;
@@ -80,11 +81,16 @@ class _WidgetAutoFillLedgerSheetState extends ConsumerState<WidgetAutoFillLedger
   }
 
   Future<void> _handleDiscard() async {
-    await ref.read(pendingSmsListProvider.notifier).discardPendingSms(widget.pendingSms.id);
-    if (mounted) {
-      Navigator.pop(context);
-      Utils.showSuccessToast(context, title: 'Transaction Discarded');
-    }
+    CustomDialogs.showDiscardSmsDialog(
+      context,
+      onConfirm: () async {
+        await ref.read(pendingSmsListProvider.notifier).discardPendingSms(widget.pendingSms.id);
+        if (mounted) {
+          Navigator.pop(context);
+          Utils.showSuccessToast(context, title: 'Transaction Discarded');
+        }
+      },
+    );
   }
 
   @override

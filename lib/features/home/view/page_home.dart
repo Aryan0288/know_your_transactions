@@ -386,7 +386,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             child: FadeTransition(
               opacity: _btnOpacity,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 36),
+                padding: EdgeInsets.fromLTRB(24, 0, 24, 36 + MediaQuery.of(context).padding.bottom),
                 child: _GetStartedButton(
                   onPressed: () {
                     Navigator.push(

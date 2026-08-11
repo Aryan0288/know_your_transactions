@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:know_your_expenses/core/widgets/custom_dialogs.dart';
+import 'package:know_your_expenses/features/helper/utils.dart';
 import 'package:know_your_expenses/features/auto_sms/view_model/auto_sms_provider.dart';
 import 'package:know_your_expenses/features/auto_sms/view/widgets/widget_auto_fill_ledger_sheet.dart';
 
@@ -105,7 +108,33 @@ class WidgetPendingLedgerBanner extends ConsumerWidget {
                                 color: const Color(0xFFE57373),
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 6),
+                            InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () {
+                                HapticFeedback.mediumImpact();
+                                CustomDialogs.showDiscardSmsDialog(
+                                  context,
+                                  onConfirm: () {
+                                    ref.read(pendingSmsListProvider.notifier).discardPendingSms(sms.id);
+                                    Utils.showSuccessToast(context, title: 'Transaction Discarded');
+                                  },
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFEBEE),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.delete_outline_rounded,
+                                  color: Color(0xFFE57373),
+                                  size: 16,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
                             const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey),
                           ],
                         ),

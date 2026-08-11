@@ -164,6 +164,42 @@ class CustomDialogs {
     );
   }
 
+  static void showDiscardSmsDialog(
+    BuildContext context, {
+    required VoidCallback onConfirm,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28.0),
+          ),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          child: _awesomeDialogContent(
+            context,
+            title: "Discard Expense?",
+            description:
+                "Are you sure you want to delete this auto-detected expense? This action cannot be undone.",
+            icon: Icons.delete_outline_rounded,
+            primaryButtonText: "Delete",
+            onPrimaryButtonPressed: () {
+              Navigator.pop(context);
+              onConfirm();
+            },
+            secondaryButtonText: "Cancel",
+            onSecondaryButtonPressed: () {
+              Navigator.pop(context);
+            },
+            color: const Color(0xFFE57373),
+          ),
+        );
+      },
+    );
+  }
+
   static void showSignupSuccessDialog(
     BuildContext context, {
     required VoidCallback onOkPressed,

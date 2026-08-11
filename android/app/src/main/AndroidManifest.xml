@@ -48,12 +48,22 @@
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-3940256099942544~3347511713"/>
 
-        <!-- Telephony SMS Broadcast Receiver -->
+        <!-- Telephony SMS Broadcast Receiver (foreground/background) -->
         <receiver
             android:name="com.shounakmulay.telephony.sms.IncomingSmsReceiver"
             android:permission="android.permission.BROADCAST_SMS"
             android:exported="true">
             <intent-filter>
+                <action android:name="android.provider.Telephony.SMS_RECEIVED"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- Native SMS Receiver — handles killed-app SMS without Flutter engine -->
+        <receiver
+            android:name=".SmsReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter android:priority="999">
                 <action android:name="android.provider.Telephony.SMS_RECEIVED"/>
             </intent-filter>
         </receiver>

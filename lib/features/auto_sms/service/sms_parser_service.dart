@@ -40,14 +40,22 @@ class SmsParserService {
     // 5. Extract Vendor / Merchant / Payee Name using Multi-Pass Parsing
     final String vendorName = _extractVendor(body, lower);
 
-    // 6. Generate Unique Hash ID to prevent duplicates
-    final String hashId = _generateSmsHash(amount, vendorName, body);
+    // 6. Extract Date & Time from SMS body
+    final dateTimeResult = _extractDateTime(body);
+    final DateTime smsDate = dateTimeResult['dateTime'] as DateTime;
+    final String dateRaw = dateTimeResult['raw'] as String;
+
+    // 7. Extract Reference / UPI Ref / Txn ID
+    final String? refNo = _extractReference(body);
+
+    // 8. Generate Unique Hash ID (based on Date/Time & UPI Ref, excluding amount)
+    final String hashId = _generateSmsHash(vendorName, refNo, dateRaw, body);
 
     return ModelPendingSms(
       id: hashId,
       amount: amount,
       vendorName: vendorName,
-      date: DateTime.now(),
+      date: smsDate,
       paymentMode: lower.contains('cash') ? 'cash' : 'online',
       isExpense: isExpense,
       rawSmsBody: body,
@@ -86,6 +94,65 @@ class SmsParserService {
       final cleanAmount = match.group(1)!.replaceAll(',', '');
       return double.tryParse(cleanAmount);
     }
+    return null;
+  }
+
+  static String? _extractReference(String body) {
+    // Matches UPI:62139832749516, UPI/62139832749516, Ref 62139832749516, RRN 62139832749516, Txn ID 62139832749516
+    final RegExp refRegExp = RegExp(
+      r'(?:upi|ref|ref\s*no|rrn|txn\s*id|info)[\:\/\s\-]*([a-zA-Z0-9]{6,25})',
+      caseSensitive: false,
+    );
+    final match = refRegExp.firstMatch(body);
+    if (match != null && match.group(1) != null) {
+      return match.group(1)!.trim();
+    }
+    return null;
+  }
+
+  static Map<String, dynamic> _extractDateTime(String body) {
+    final RegExp dateTimeRegExp = RegExp(
+      r'(?:dt|date|on)?\s*(\d{2}[\/\-]\d{2}[\/\-]\d{2,4}(?:\s+\d{2}:\d{2}(?::\d{2})?)?)',
+      caseSensitive: false,
+    );
+
+    final match = dateTimeRegExp.firstMatch(body);
+    if (match != null && match.group(1) != null) {
+      final str = match.group(1)!.trim();
+      final parsedDate = _parseDateString(str);
+      return {
+        'raw': str.replaceAll(RegExp(r'[^a-zA-Z0-9]'), ''),
+        'dateTime': parsedDate ?? DateTime.now(),
+      };
+    }
+
+    return {
+      'raw': '',
+      'dateTime': DateTime.now(),
+    };
+  }
+
+  static DateTime? _parseDateString(String str) {
+    try {
+      final parts = str.trim().split(RegExp(r'\s+'));
+      final datePart = parts[0];
+      final timePart = parts.length > 1 ? parts[1] : '00:00:00';
+
+      final dateComponents = datePart.split(RegExp(r'[\/\-]'));
+      if (dateComponents.length == 3) {
+        int day = int.parse(dateComponents[0]);
+        int month = int.parse(dateComponents[1]);
+        int year = int.parse(dateComponents[2]);
+        if (year < 100) year += 2000;
+
+        final timeComponents = timePart.split(':');
+        int hour = timeComponents.isNotEmpty ? int.parse(timeComponents[0]) : 0;
+        int minute = timeComponents.length > 1 ? int.parse(timeComponents[1]) : 0;
+        int second = timeComponents.length > 2 ? int.parse(timeComponents[2]) : 0;
+
+        return DateTime(year, month, day, hour, minute, second);
+      }
+    } catch (_) {}
     return null;
   }
 
@@ -166,8 +233,23 @@ class SmsParserService {
     }).join(' ');
   }
 
-  static String _generateSmsHash(double amount, String vendor, String body) {
-    final raw = '${amount.toStringAsFixed(2)}_${vendor.toLowerCase()}_${body.length}';
-    return raw.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '');
+  static String _generateSmsHash(
+    String vendor,
+    String? refNo,
+    String dateRaw,
+    String body,
+  ) {
+    final String cleanVendor = vendor.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final String cleanRef = (refNo ?? '').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final String cleanDate = dateRaw.replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+    if (cleanRef.isNotEmpty || cleanDate.isNotEmpty) {
+      return 'hash_${cleanRef}_${cleanDate}_$cleanVendor';
+    }
+
+    // Fallback if neither ref nor date string found: body text fingerprint without digits
+    final String bodyNoNumbers = body.replaceAll(RegExp(r'\d+'), '').toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
+    final String fallbackSnippet = bodyNoNumbers.length > 30 ? bodyNoNumbers.substring(0, 30) : bodyNoNumbers;
+    return 'hash_${cleanVendor}_$fallbackSnippet';
   }
 }

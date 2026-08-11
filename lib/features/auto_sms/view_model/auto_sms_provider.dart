@@ -8,7 +8,6 @@ import 'package:know_your_expenses/features/auto_sms/service/sms_parser_service.
 import 'package:know_your_expenses/features/home/view_model/view_model_group.dart';
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
 import 'package:know_your_expenses/features/transaction/model/model_transaction.dart';
-import 'package:know_your_expenses/features/helper/notification_helper.dart';
 
 final autoSmsEnabledProvider = StateProvider<bool>((ref) => false);
 
@@ -35,6 +34,10 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
     } catch (_) {}
   }
 
+  /// Called by AppLifecycleObserver when app resumes — picks up SMS saved by native Kotlin SmsReceiver
+  Future<void> reloadFromPrefs() => _loadFromPrefs();
+
+
   Future<void> _saveToPrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -44,6 +47,7 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
   }
 
   Future<void> processIncomingSms(String smsBody) async {
+    await _loadFromPrefs();
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
 
@@ -62,18 +66,30 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
     if (state.any((item) => item.id == parsedSms.id)) return;
 
     // Check user groups eligible for transactions
-    final allGroups = ref.read(userGroupsStreamProvider).value ?? [];
+    // IMPORTANT: Use AsyncValue state — if stream is still loading, default to pending queue
+    // to avoid incorrectly routing to Case A (direct transaction add) when groups may exist.
+    final groupsAsync = ref.read(userGroupsStreamProvider);
+
+    if (groupsAsync.isLoading || groupsAsync.hasError) {
+      // Stream not ready → safe fallback: add to pending queue, user will handle on resume
+      if (state.any((item) => item.id == parsedSms.id)) return;
+      state = [parsedSms, ...state];
+      await _saveToPrefs();
+      return;
+    }
+
+    final allGroups = groupsAsync.value ?? [];
     final groups = allGroups.where((group) {
       if (group.type == 'wages') {
-        final isAdmin = currentUser != null &&
-            (group.adminId == currentUser.uid || group.admins.contains(currentUser.uid));
+        final isAdmin =
+            group.adminId == currentUser.uid || group.admins.contains(currentUser.uid);
         return isAdmin;
       }
       return true;
     }).toList();
 
     if (groups.isEmpty) {
-      // 🟢 Case A: No groups created -> Auto-Add directly to Personal Workspace
+      // 🟢 Case A: No groups confirmed (stream loaded) → Auto-Add directly to Personal Workspace
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         final categories = ref.read(categoriesProvider).value ?? [];
@@ -94,21 +110,11 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
               isExpense: parsedSms.isExpense,
               paymentMode: parsedSms.paymentMode,
             );
-
-        NotificationHelper.showLocalNotification(
-          title: 'Auto Expense Recorded 💳',
-          body: '₹${parsedSms.amount.toStringAsFixed(2)} at ${parsedSms.vendorName} added to Personal expenses.',
-        );
       }
     } else {
-      // 🟡 Case B: Multi-group user -> Add to Pending Auto-Fill Ledger
+      // 🟡 Case B: Multi-group user → Add to Pending Auto-Fill Ledger
       state = [parsedSms, ...state];
       await _saveToPrefs();
-
-      NotificationHelper.showLocalNotification(
-        title: 'New Auto-Detected Expense 📱',
-        body: '₹${parsedSms.amount.toStringAsFixed(2)} at ${parsedSms.vendorName}. Tap to assign Group.',
-      );
     }
   }
 
