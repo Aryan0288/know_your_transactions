@@ -115,6 +115,12 @@ final categoriesProvider = StreamProvider<List<CategoryModel>>((ref) {
       iconCodePoint: Icons.medical_services.codePoint,
       colorValue: Colors.red.value,
     ),
+    CategoryModel(
+      id: 'online',
+      name: 'Online',
+      iconCodePoint: Icons.account_balance_wallet.codePoint,
+      colorValue: const Color(0xFF429690).value,
+    ),
   ];
 
   final otherCategory = CategoryModel(

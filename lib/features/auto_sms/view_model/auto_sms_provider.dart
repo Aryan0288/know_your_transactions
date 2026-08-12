@@ -33,12 +33,67 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
       if (jsonStr != null && jsonStr.isNotEmpty) {
         final List<dynamic> list = jsonDecode(jsonStr);
         state = list.map((item) => ModelPendingSms.fromMap(Map<String, dynamic>.from(item), item['id'])).toList();
+        await _autoProcessPersonalItems();
       }
     } catch (_) {}
   }
 
   /// Called by AppLifecycleObserver when app resumes — picks up SMS saved by native Kotlin SmsReceiver
   Future<void> reloadFromPrefs() => _loadFromPrefs();
+
+  Future<void> _autoProcessPersonalItems() async {
+    if (state.isEmpty) return;
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    List<GroupModel> allGroups = [];
+    final groupsAsync = ref.read(userGroupsStreamProvider);
+
+    if (!groupsAsync.isLoading && !groupsAsync.hasError && groupsAsync.hasValue) {
+      allGroups = groupsAsync.value ?? [];
+    } else {
+      try {
+        final querySnap = await FirebaseFirestore.instance
+            .collection('groups')
+            .where('members', arrayContains: currentUser.uid)
+            .get();
+        allGroups = querySnap.docs
+            .map((doc) => GroupModel.fromMap(doc.data(), doc.id))
+            .toList();
+      } catch (_) {}
+    }
+
+    final groups = allGroups.where((group) {
+      if (group.type == 'wages') {
+        final isAdmin =
+            group.adminId == currentUser.uid || group.admins.contains(currentUser.uid);
+        return isAdmin;
+      }
+      return true;
+    }).toList();
+
+    if (groups.isEmpty) {
+      final itemsToProcess = List<ModelPendingSms>.from(state);
+      final categories = ref.read(categoriesProvider).value ?? [];
+
+      for (final item in itemsToProcess) {
+        final category = getSmartCategory(item, categories);
+
+        await ref.read(transactionViewModelProvider.notifier).addTransaction(
+              amount: item.amount,
+              description: item.vendorName,
+              category: category,
+              date: item.date,
+              isExpense: item.isExpense,
+              paymentMode: item.paymentMode,
+            );
+      }
+
+      state = [];
+      await _saveToPrefs();
+    }
+  }
 
 
   Future<void> _saveToPrefs() async {

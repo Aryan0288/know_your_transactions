@@ -9,6 +9,8 @@ import android.content.Intent
 import android.os.Build
 import android.provider.Telephony
 import androidx.core.app.NotificationCompat
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -72,34 +74,131 @@ class SmsReceiver : BroadcastReceiver() {
             val body = sms.messageBody ?: continue
             val parsed = parseSms(body) ?: continue
 
-            val existingJson = prefs.getString(KEY_PENDING, "[]") ?: "[]"
-            val list = try { JSONArray(existingJson) } catch (e: Exception) { JSONArray() }
+            val currentUser = FirebaseAuth.getInstance().currentUser
+            val userId = currentUser?.uid
 
-            var duplicate = false
-            for (i in 0 until list.length()) {
-                if (list.optJSONObject(i)?.optString("id") == parsed.optString("id")) {
-                    duplicate = true; break
-                }
+            if (userId != null) {
+                val db = FirebaseFirestore.getInstance()
+                db.collection("groups")
+                    .whereArrayContains("members", userId)
+                    .get()
+                    .addOnSuccessListener { querySnapshot ->
+                        val userGroups = querySnapshot.documents.filter { doc ->
+                            val type = doc.getString("type")
+                            if (type == "wages") {
+                                val adminId = doc.getString("adminId")
+                                val admins = doc.get("admins") as? List<*>
+                                adminId == userId || (admins != null && admins.contains(userId))
+                            } else {
+                                true
+                            }
+                        }
+
+                        if (userGroups.isEmpty()) {
+                            // 🟢 Case A: 0 Groups -> Instant Native Firestore Write to Personal Workspace
+                            val amount = parsed.optDouble("amount", 0.0)
+                            val vendor = parsed.optString("vendorName", "Unknown")
+                            val isExpense = parsed.optBoolean("isExpense", true)
+                            val paymentMode = parsed.optString("paymentMode", "online")
+                            val dateStr = parsed.optString("date", currentIso())
+                            val categoryMap = getCategoryForSms(isExpense, vendor)
+
+                            val txnMap = hashMapOf<String, Any?>(
+                                "amount" to amount,
+                                "description" to vendor,
+                                "categoryId" to categoryMap["id"],
+                                "categoryName" to categoryMap["name"],
+                                "iconCodePoint" to categoryMap["iconCodePoint"],
+                                "colorValue" to categoryMap["colorValue"],
+                                "date" to dateStr,
+                                "userId" to userId,
+                                "isExpense" to isExpense,
+                                "isShared" to false,
+                                "splitWith" to null,
+                                "splitAmounts" to null,
+                                "groupId" to null,
+                                "paymentMode" to paymentMode
+                            )
+
+                            db.collection("users").document(userId).collection("transactions")
+                                .add(txnMap)
+                                .addOnSuccessListener {
+                                    val label = if (isExpense) "Expense" else "Income"
+                                    showNotification(context,
+                                        title = "Auto-Added $label",
+                                        body = "Rs.${"%.2f".format(amount)} at $vendor to Personal Space"
+                                    )
+                                    notifyFlutterApp(context)
+                                }
+                        } else {
+                            // 🟡 Case B: Multi-group user -> Save to pending queue in SharedPreferences
+                            saveToPending(prefs, parsed, context)
+                        }
+                    }
+                    .addOnFailureListener {
+                        saveToPending(prefs, parsed, context)
+                    }
+            } else {
+                saveToPending(prefs, parsed, context)
             }
-            if (duplicate) continue
-
-            val newList = JSONArray()
-            newList.put(parsed)
-            for (i in 0 until list.length()) newList.put(list.get(i))
-            prefs.edit().putString(KEY_PENDING, newList.toString()).apply()
-
-            val amount = parsed.optDouble("amount", 0.0)
-            val vendor = parsed.optString("vendorName", "Unknown")
-            showNotification(context,
-                title = "New Auto-Detected Expense",
-                body = "Rs.${"%.2f".format(amount)} at $vendor. Tap to assign Group."
-            )
-
-            val broadcastIntent = Intent("com.anuj.knowyourexpenses.SMS_RECEIVED_EVENT").apply {
-                setPackage(context.packageName)
-            }
-            context.sendBroadcast(broadcastIntent)
         }
+    }
+
+    private fun getCategoryForSms(isExpense: Boolean, vendor: String): Map<String, Any> {
+        if (!isExpense) {
+            return mapOf(
+                "id" to "online",
+                "name" to "Online",
+                "iconCodePoint" to 59654,
+                "colorValue" to 0xFF429690.toInt()
+            )
+        }
+        val lowerVendor = vendor.lowercase(Locale.getDefault())
+        return when {
+            lowerVendor.contains("zomato") || lowerVendor.contains("swiggy") || lowerVendor.contains("restaurant") || lowerVendor.contains("food") || lowerVendor.contains("cafe") ->
+                mapOf("id" to "food", "name" to "Food", "iconCodePoint" to 58732, "colorValue" to 0xFFFFA726.toInt())
+            lowerVendor.contains("uber") || lowerVendor.contains("ola") || lowerVendor.contains("rapido") || lowerVendor.contains("metro") || lowerVendor.contains("fuel") ->
+                mapOf("id" to "transport", "name" to "Transport", "iconCodePoint" to 58673, "colorValue" to 0xFF42A5F5.toInt())
+            lowerVendor.contains("amazon") || lowerVendor.contains("flipkart") || lowerVendor.contains("myntra") || lowerVendor.contains("mart") ->
+                mapOf("id" to "shopping", "name" to "Shopping", "iconCodePoint" to 58780, "colorValue" to 0xFFEC407A.toInt())
+            else ->
+                mapOf("id" to "other", "name" to "Other", "iconCodePoint" to 58343, "colorValue" to 0xFF9E9E9E.toInt())
+        }
+    }
+
+    private fun saveToPending(prefs: android.content.SharedPreferences, parsed: JSONObject, context: Context) {
+        val existingJson = prefs.getString(KEY_PENDING, "[]") ?: "[]"
+        val list = try { JSONArray(existingJson) } catch (e: Exception) { JSONArray() }
+
+        var duplicate = false
+        for (i in 0 until list.length()) {
+            if (list.optJSONObject(i)?.optString("id") == parsed.optString("id")) {
+                duplicate = true; break
+            }
+        }
+        if (duplicate) return
+
+        val newList = JSONArray()
+        newList.put(parsed)
+        for (i in 0 until list.length()) newList.put(list.get(i))
+        prefs.edit().putString(KEY_PENDING, newList.toString()).apply()
+
+        val amount = parsed.optDouble("amount", 0.0)
+        val vendor = parsed.optString("vendorName", "Unknown")
+        val isExpense = parsed.optBoolean("isExpense", true)
+        val label = if (isExpense) "Expense" else "Income"
+        showNotification(context,
+            title = "New Auto-Detected $label",
+            body = "Rs.${"%.2f".format(amount)} at $vendor"
+        )
+        notifyFlutterApp(context)
+    }
+
+    private fun notifyFlutterApp(context: Context) {
+        val broadcastIntent = Intent("com.anuj.knowyourexpenses.SMS_RECEIVED_EVENT").apply {
+            setPackage(context.packageName)
+        }
+        context.sendBroadcast(broadcastIntent)
     }
 
     private fun parseSms(body: String): JSONObject? {
