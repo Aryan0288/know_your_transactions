@@ -52,14 +52,7 @@ class _WidgetAutoFillLedgerSheetState extends ConsumerState<WidgetAutoFillLedger
 
     final categories = ref.read(categoriesProvider).value ?? [];
     final category = _selectedCategory ??
-        (categories.isNotEmpty
-            ? categories.first
-            : CategoryModel(
-                id: 'shopping',
-                name: 'Shopping',
-                iconCodePoint: Icons.shopping_bag.codePoint,
-                colorValue: Colors.teal.value,
-              ));
+        PendingSmsNotifier.getSmartCategory(widget.pendingSms, categories);
 
     await ref.read(pendingSmsListProvider.notifier).assignPendingSms(
           pendingId: widget.pendingSms.id,
@@ -108,7 +101,7 @@ class _WidgetAutoFillLedgerSheetState extends ConsumerState<WidgetAutoFillLedger
     final categories = ref.watch(categoriesProvider).value ?? [];
 
     if (_selectedCategory == null && categories.isNotEmpty) {
-      _selectedCategory = categories.first;
+      _selectedCategory = PendingSmsNotifier.getSmartCategory(widget.pendingSms, categories);
     }
 
     return Container(

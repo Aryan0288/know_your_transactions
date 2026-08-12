@@ -3,8 +3,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:know_your_expenses/features/auto_sms/model/model_pending_sms.dart';
 import 'package:know_your_expenses/features/auto_sms/service/sms_parser_service.dart';
+import 'package:know_your_expenses/features/home/model/group_model.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_group.dart';
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
 import 'package:know_your_expenses/features/transaction/model/model_transaction.dart';
@@ -66,19 +69,23 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
     if (state.any((item) => item.id == parsedSms.id)) return;
 
     // Check user groups eligible for transactions
-    // IMPORTANT: Use AsyncValue state — if stream is still loading, default to pending queue
-    // to avoid incorrectly routing to Case A (direct transaction add) when groups may exist.
+    List<GroupModel> allGroups = [];
     final groupsAsync = ref.read(userGroupsStreamProvider);
 
-    if (groupsAsync.isLoading || groupsAsync.hasError) {
-      // Stream not ready → safe fallback: add to pending queue, user will handle on resume
-      if (state.any((item) => item.id == parsedSms.id)) return;
-      state = [parsedSms, ...state];
-      await _saveToPrefs();
-      return;
+    if (!groupsAsync.isLoading && !groupsAsync.hasError && groupsAsync.hasValue) {
+      allGroups = groupsAsync.value ?? [];
+    } else {
+      try {
+        final querySnap = await FirebaseFirestore.instance
+            .collection('groups')
+            .where('members', arrayContains: currentUser.uid)
+            .get();
+        allGroups = querySnap.docs
+            .map((doc) => GroupModel.fromMap(doc.data(), doc.id))
+            .toList();
+      } catch (_) {}
     }
 
-    final allGroups = groupsAsync.value ?? [];
     final groups = allGroups.where((group) {
       if (group.type == 'wages') {
         final isAdmin =
@@ -89,23 +96,16 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
     }).toList();
 
     if (groups.isEmpty) {
-      // 🟢 Case A: No groups confirmed (stream loaded) → Auto-Add directly to Personal Workspace
+      // 🟢 Case A: No groups exist → Auto-Add directly to Personal Workspace
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         final categories = ref.read(categoriesProvider).value ?? [];
-        final defaultCategory = categories.isNotEmpty
-            ? categories.first
-            : CategoryModel(
-                id: 'shopping',
-                name: 'Shopping',
-                iconCodePoint: 0xe59c,
-                colorValue: 0xFF429690,
-              );
+        final category = getSmartCategory(parsedSms, categories);
 
         await ref.read(transactionViewModelProvider.notifier).addTransaction(
               amount: parsedSms.amount,
               description: parsedSms.vendorName,
-              category: defaultCategory,
+              category: category,
               date: parsedSms.date,
               isExpense: parsedSms.isExpense,
               paymentMode: parsedSms.paymentMode,
@@ -115,6 +115,50 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
       // 🟡 Case B: Multi-group user → Add to Pending Auto-Fill Ledger
       state = [parsedSms, ...state];
       await _saveToPrefs();
+    }
+  }
+
+  static CategoryModel getSmartCategory(ModelPendingSms sms, List<CategoryModel> categories) {
+    if (categories.isEmpty) {
+      return CategoryModel(
+        id: 'other',
+        name: 'Other',
+        iconCodePoint: 0xe3e7,
+        colorValue: 0xFF9E9E9E,
+      );
+    }
+
+    if (!sms.isExpense) {
+      // For credited/income transactions: always set category to 'Online'
+      return categories.firstWhere(
+        (c) => c.id == 'online' || c.name.toLowerCase() == 'online',
+        orElse: () => CategoryModel(
+          id: 'online',
+          name: 'Online',
+          iconCodePoint: Icons.account_balance_wallet.codePoint,
+          colorValue: 0xFF429690,
+        ),
+      );
+    } else {
+      // For debit/expense transactions: check vendor keywords
+      final vendor = sms.vendorName.toLowerCase();
+      for (final c in categories) {
+        final name = c.name.toLowerCase();
+        if (name == 'food' && (vendor.contains('zomato') || vendor.contains('swiggy') || vendor.contains('restaurant') || vendor.contains('food') || vendor.contains('cafe') || vendor.contains('dine'))) {
+          return c;
+        }
+        if (name == 'transport' && (vendor.contains('uber') || vendor.contains('ola') || vendor.contains('rapido') || vendor.contains('metro') || vendor.contains('fuel') || vendor.contains('petrol'))) {
+          return c;
+        }
+        if (name == 'shopping' && (vendor.contains('amazon') || vendor.contains('flipkart') || vendor.contains('myntra') || vendor.contains('mart') || vendor.contains('store'))) {
+          return c;
+        }
+      }
+      // Default fallback to 'Other' if available, otherwise first category
+      return categories.firstWhere(
+        (c) => c.id == 'other' || c.name.toLowerCase() == 'other',
+        orElse: () => categories.first,
+      );
     }
   }
 
