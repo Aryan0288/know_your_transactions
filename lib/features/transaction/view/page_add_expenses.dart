@@ -13,6 +13,7 @@ import 'package:know_your_expenses/features/helper/ad_helper.dart';
 class AddExpensePage extends ConsumerStatefulWidget {
   final double? initialAmount;
   final TransactionModel? editTransaction;
+  final TransactionModel? repeatTransaction;
   final String? initialGroupId;
   final String? initialRecipientId;
   final String? initialDescription;
@@ -21,6 +22,7 @@ class AddExpensePage extends ConsumerStatefulWidget {
     super.key,
     this.initialAmount,
     this.editTransaction,
+    this.repeatTransaction,
     this.initialGroupId,
     this.initialRecipientId,
     this.initialDescription,
@@ -49,45 +51,47 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
   @override
   void initState() {
     super.initState();
+    final sourceTx = widget.editTransaction ?? widget.repeatTransaction;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(addExpensePaymentModeProvider.notifier).state =
-          widget.initialPaymentMode ?? (widget.editTransaction?.paymentMode ?? 'cash');
+          widget.initialPaymentMode ?? (sourceTx?.paymentMode ?? 'cash');
     });
     selectedCategoryNotifier = ValueNotifier<CategoryModel?>(
-      widget.editTransaction != null
+      sourceTx != null
           ? CategoryModel(
-              id: widget.editTransaction!.categoryId,
-              name: widget.editTransaction!.categoryName,
-              iconCodePoint: widget.editTransaction!.iconCodePoint,
-              colorValue: widget.editTransaction!.colorValue,
+              id: sourceTx.categoryId,
+              name: sourceTx.categoryName,
+              iconCodePoint: sourceTx.iconCodePoint,
+              colorValue: sourceTx.colorValue,
             )
           : null,
     );
-    selectedDateNotifier = ValueNotifier<DateTime>(widget.editTransaction?.date ?? DateTime.now());
+    selectedDateNotifier = ValueNotifier<DateTime>(sourceTx?.date ?? DateTime.now());
     isSharedNotifier = ValueNotifier<bool>(
-      widget.editTransaction?.isShared ?? (widget.initialGroupId != null && widget.initialGroupId != 'personal'),
+      sourceTx?.isShared ?? (widget.initialGroupId != null && widget.initialGroupId != 'personal'),
     );
     selectedSplitMembersNotifier = ValueNotifier<List<String>>(
-      widget.editTransaction?.splitWith ?? (widget.initialRecipientId != null ? [widget.initialRecipientId!] : []),
+      sourceTx?.splitWith ?? (widget.initialRecipientId != null ? [widget.initialRecipientId!] : []),
     );
     selectedGroupIdNotifier = ValueNotifier<String?>(
-      widget.editTransaction != null
-          ? (widget.editTransaction!.isShared
-              ? widget.editTransaction!.groupId
+      sourceTx != null
+          ? (sourceTx.isShared
+              ? sourceTx.groupId
               : 'personal')
           : (widget.initialGroupId ?? null),
     );
-    isCustomSplitNotifier = ValueNotifier<bool>(widget.editTransaction?.splitAmounts != null);
-    splitAmountsNotifier = ValueNotifier<Map<String, double>>(widget.editTransaction?.splitAmounts ?? {});
-    isExpenseNotifier = ValueNotifier<bool>(widget.editTransaction?.isExpense ?? true);
+    isCustomSplitNotifier = ValueNotifier<bool>(sourceTx?.splitAmounts != null);
+    splitAmountsNotifier = ValueNotifier<Map<String, double>>(sourceTx?.splitAmounts ?? {});
+    isExpenseNotifier = ValueNotifier<bool>(sourceTx?.isExpense ?? true);
     
-    if (widget.editTransaction != null) {
-      amountController.text = widget.editTransaction!.amount % 1 == 0
-          ? widget.editTransaction!.amount.toInt().toString()
-          : widget.editTransaction!.amount.toString();
-      descriptionController.text = widget.editTransaction!.description;
-      if (widget.editTransaction!.splitAmounts != null) {
-        widget.editTransaction!.splitAmounts!.forEach((uid, val) {
+    if (sourceTx != null) {
+      amountController.text = sourceTx.amount % 1 == 0
+          ? sourceTx.amount.toInt().toString()
+          : sourceTx.amount.toString();
+      descriptionController.text = sourceTx.description;
+      if (sourceTx.splitAmounts != null) {
+        sourceTx.splitAmounts!.forEach((uid, val) {
           _memberSplitControllers[uid] = TextEditingController(
             text: val % 1 == 0 ? val.toInt().toString() : val.toString(),
           );
@@ -264,7 +268,11 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
       backgroundColor: const Color(0xFFF8F9FE),
       appBar: AppBar(
         title: Text(
-          'Add Expense',
+          widget.editTransaction != null
+              ? 'Edit Transaction'
+              : (widget.repeatTransaction != null
+                  ? 'Repeat Transaction'
+                  : 'Add Expense'),
           style: GoogleFonts.manrope(
             fontWeight: FontWeight.bold,
             color: Colors.white,
@@ -887,7 +895,14 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                                             value: 'personal',
                                             child: Text('Personal Space', style: GoogleFonts.manrope(fontWeight: FontWeight.w600)),
                                           ),
-                                          ...groups.map((g) {
+                                          ...groups.where((g) {
+                                            final isGroupAdmin = currentUserId != null &&
+                                                (g.adminId == currentUserId || g.admins.contains(currentUserId));
+                                            if (g.type == 'business' || g.type == 'wages') {
+                                              return isGroupAdmin;
+                                            }
+                                            return true;
+                                          }).map((g) {
                                             return DropdownMenuItem<String?>(
                                               value: g.id,
                                               child: Text('Group: ${g.name}', style: GoogleFonts.manrope(fontWeight: FontWeight.w600)),
@@ -1298,6 +1313,20 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                           : null;
                       final isBusinessGroup = selectedGroup?.type == 'business';
                       final isWagesGroup = selectedGroup?.type == 'wages';
+
+                      final currentUid = ref.read(firebaseAuthProvider).currentUser?.uid;
+                      final isGroupAdmin = selectedGroup != null && currentUid != null &&
+                          (selectedGroup.adminId == currentUid || selectedGroup.admins.contains(currentUid));
+
+                      if (shared && (isBusinessGroup || isWagesGroup) && !isGroupAdmin) {
+                        Utils.showErrorToast(
+                          context,
+                          alignment: Alignment.bottomCenter,
+                          title: "Permission Denied",
+                          description: "Only Admin can add or edit transactions in this space.",
+                        );
+                        return;
+                      }
 
                       if (shared && !isBusinessGroup && !isWagesGroup) {
                         if (splitWith.isEmpty) {

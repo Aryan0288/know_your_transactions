@@ -1,0 +1,177 @@
+{
+  "project_info": {
+    "project_number": "89507154805",
+    "project_id": "know-your-expenses-35923",
+    "storage_bucket": "know-your-expenses-35923.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:89507154805:android:6cc545ca2f7468e68c213c",
+        "android_client_info": {
+          "package_name": "com.anuj.knowyourexpenses"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "89507154805-78g4kce2h5pild22m7v0n4an0susjrrq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.anuj.knowyourexpenses",
+            "certificate_hash": "9e8ac2a0a3c964713f2ed24c89a5b035911d3085"
+          }
+        },
+        {
+          "client_id": "89507154805-gllldk97n423iaut8v224qb08i5f8sml.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.anuj.knowyourexpenses",
+            "certificate_hash": "1e81220cd356f4fb9a42d30c291d703e68c9d515"
+          }
+        },
+        {
+          "client_id": "89507154805-j9k3ne4ve4u7vf2vbiggf2u2k0gd7fl8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.anuj.knowyourexpenses",
+            "certificate_hash": "ceca0cc4e8e41c93f95e8ab0d46e2d9f521fe18f"
+          }
+        },
+        {
+          "client_id": "89507154805-uen1nh9eumir9ptsonq7rnoblsi0gvp8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.anuj.knowyourexpenses",
+            "certificate_hash": "01b9dc0945560564db1f44a1ef43757865b79878"
+          }
+        },
+        {
+          "client_id": "89507154805-kvcse5h6nsskmncosjvejjqi1il1ace4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGqEiXAbRCyW2e4tttA-i_rOYJvVFmJWY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "89507154805-kvcse5h6nsskmncosjvejjqi1il1ace4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:89507154805:android:816c59207aaafc2c8c213c",
+        "android_client_info": {
+          "package_name": "com.apps.knowyourexpenses"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "89507154805-57qj2o98ug93ucsl8a6g2lvqk3s93bd2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.apps.knowyourexpenses",
+            "certificate_hash": "5c1661c67f3c16b4e35bf58ea616c867136b758b"
+          }
+        },
+        {
+          "client_id": "89507154805-5okfd7p0mki10e3q5clo41nemgf6v3oo.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.apps.knowyourexpenses",
+            "certificate_hash": "1e81220cd356f4fb9a42d30c291d703e68c9d515"
+          }
+        },
+        {
+          "client_id": "89507154805-c32m9fv6mofbb5eo0o79qgiar7vd6bhk.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.apps.knowyourexpenses",
+            "certificate_hash": "9e8ac2a0a3c964713f2ed24c89a5b035911d3085"
+          }
+        },
+        {
+          "client_id": "89507154805-j38ap13fhrnguoc5m846ag7ulbqjagru.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.apps.knowyourexpenses",
+            "certificate_hash": "ceca0cc4e8e41c93f95e8ab0d46e2d9f521fe18f"
+          }
+        },
+        {
+          "client_id": "89507154805-l7t671rce65o912vfn14jdh3vd6dekrq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.apps.knowyourexpenses",
+            "certificate_hash": "01b9dc0945560564db1f44a1ef43757865b79878"
+          }
+        },
+        {
+          "client_id": "89507154805-u4avlf58t3e2p6a0sr79l167qgev83sd.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.apps.knowyourexpenses",
+            "certificate_hash": "5f31ae75a46c4ff4017dd9d2b9faca8bf7d6cddb"
+          }
+        },
+        {
+          "client_id": "89507154805-kvcse5h6nsskmncosjvejjqi1il1ace4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGqEiXAbRCyW2e4tttA-i_rOYJvVFmJWY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "89507154805-kvcse5h6nsskmncosjvejjqi1il1ace4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:89507154805:android:d8ff15929d96293e8c213c",
+        "android_client_info": {
+          "package_name": "com.resumatch.ai_resume_analyzer"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "89507154805-kvcse5h6nsskmncosjvejjqi1il1ace4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGqEiXAbRCyW2e4tttA-i_rOYJvVFmJWY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "89507154805-kvcse5h6nsskmncosjvejjqi1il1ace4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

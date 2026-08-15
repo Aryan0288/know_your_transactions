@@ -28,9 +28,11 @@ class VersionConfigModel {
 
     return VersionConfigModel(
       minRequiredVersion: target['min_required_version'] as String? ?? '0.0.0',
-      updateMessage: target['update_message'] as String? ??
+      updateMessage:
+          target['update_message'] as String? ??
           'A new version of the app is available.',
-      playStoreUrl: target['play_store_url'] as String? ??
+      playStoreUrl:
+          target['play_store_url'] as String? ??
           (packageName != null
               ? 'https://play.google.com/store/apps/details?id=$packageName'
               : 'https://play.google.com/store/apps/details?id=com.anuj.knowyourexpenses'),

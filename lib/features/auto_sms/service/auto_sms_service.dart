@@ -22,7 +22,9 @@ Future<void> backgroundSmsHandler(SmsMessage message) async {
     if (parsedSms == null) return;
 
     final String? jsonStr = prefs.getString('pending_auto_sms_items');
-    List<dynamic> list = (jsonStr != null && jsonStr.isNotEmpty) ? jsonDecode(jsonStr) : [];
+    List<dynamic> list = (jsonStr != null && jsonStr.isNotEmpty)
+        ? jsonDecode(jsonStr)
+        : [];
 
     // Deduplication check
     if (list.any((item) => item['id'] == parsedSms.id)) return;
@@ -34,7 +36,9 @@ Future<void> backgroundSmsHandler(SmsMessage message) async {
 
 class AutoSmsService {
   static final Telephony _telephony = Telephony.instance;
-  static const MethodChannel _nativeChannel = MethodChannel('com.anuj.knowyourexpenses/auto_sms');
+  static const MethodChannel _nativeChannel = MethodChannel(
+    'com.anuj.knowyourexpenses/auto_sms',
+  );
 
   /// Initializes SMS listener on app startup if feature is enabled by user.
   static Future<void> initializeOnAppStart(WidgetRef ref) async {
@@ -66,7 +70,9 @@ class AutoSmsService {
       _telephony.listenIncomingSms(
         onNewMessage: (SmsMessage message) {
           if (message.body != null) {
-            ref.read(pendingSmsListProvider.notifier).processIncomingSms(message.body!);
+            ref
+                .read(pendingSmsListProvider.notifier)
+                .processIncomingSms(message.body!);
           }
         },
         listenInBackground: true,

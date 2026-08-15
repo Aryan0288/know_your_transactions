@@ -382,8 +382,12 @@ class SplitLedgerPage extends ConsumerWidget {
                       SliverToBoxAdapter(
                         child: Consumer(
                           builder: (context, ref, child) {
-                            if (selectedMemberId == null) {
+                             if (selectedMemberId == null) {
                               if (isWages && !isAdmin) return const SizedBox();
+
+                              if (selectedGroup?.type == 'business') {
+                                return const SizedBox();
+                              }
 
                               double groupWagesTotal = 0.0;
                               double netBalance = 0.0;
@@ -525,10 +529,17 @@ class SplitLedgerPage extends ConsumerWidget {
                                         : 'Total Wages Received';
                                   } else if (isBusinessGroup) {
                                     final mTransactions = transactions.where((t) => t.userId == mUid);
+                                    double mIncome = 0.0;
+                                    double mExpense = 0.0;
                                     for (var t in mTransactions) {
-                                      displayAmount += t.amount;
+                                      if (t.isExpense) {
+                                        mExpense += t.amount;
+                                      } else {
+                                        mIncome += t.amount;
+                                      }
                                     }
-                                    summaryTitle = 'Total Spends';
+                                    displayAmount = mIncome - mExpense;
+                                    summaryTitle = displayAmount >= 0 ? 'Net Income' : 'Net Deficit';
                                   } else {
                                     double bal = 0.0;
                                     for (var b in balances) {
@@ -892,10 +903,17 @@ class SplitLedgerPage extends ConsumerWidget {
                                     }
                                   } else if (isBusinessGroup) {
                                     final mTransactions = transactions.where((t) => t.userId == mUid);
+                                    double mIncome = 0.0;
+                                    double mExpense = 0.0;
                                     for (var t in mTransactions) {
-                                      displayAmount += t.amount;
+                                      if (t.isExpense) {
+                                        mExpense += t.amount;
+                                      } else {
+                                        mIncome += t.amount;
+                                      }
                                     }
-                                    labelText = 'Spent: ₹${displayAmount.toStringAsFixed(2)}';
+                                    final net = mIncome - mExpense;
+                                    labelText = 'Net: ${net >= 0 ? "+" : "-"}₹${net.abs().toStringAsFixed(2)} (In: ₹${mIncome.toStringAsFixed(0)}, Out: ₹${mExpense.toStringAsFixed(0)})';
                                   } else {
                                     double bal = 0.0;
                                     for (var b in balances) {
@@ -1801,6 +1819,120 @@ SliverToBoxAdapter(
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildBusinessGroupSummaryCard(
+    BuildContext context,
+    double income,
+    double expense,
+    double net,
+  ) {
+    final isPositive = net >= 0;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isPositive
+              ? [const Color(0xFF1A5C3A), const Color(0xFF2E8B57)]
+              : [const Color(0xFFB71C1C), const Color(0xFFE57373)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: (isPositive ? const Color(0xFF2E8B57) : const Color(0xFFE57373)).withOpacity(0.3),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Net Balance',
+                    style: GoogleFonts.manrope(
+                      fontSize: 14,
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    '${isPositive ? "+" : "-"}₹${net.abs().toStringAsFixed(2)}',
+                    style: GoogleFonts.manrope(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isPositive ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.arrow_downward_rounded, color: Colors.lightGreenAccent, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Income: ₹${income.toStringAsFixed(2)}',
+                      style: GoogleFonts.manrope(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(width: 1, height: 16, color: Colors.white24),
+                Row(
+                  children: [
+                    const Icon(Icons.arrow_upward_rounded, color: Colors.orangeAccent, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Expense: ₹${expense.toStringAsFixed(2)}',
+                      style: GoogleFonts.manrope(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

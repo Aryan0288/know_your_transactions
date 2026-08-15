@@ -45,18 +45,19 @@ class TransactionDetailDialog extends ConsumerWidget {
         
         final groupType = group != null ? (group.toMap()['type'] as String? ?? 'split') : 'personal';
         final adminId = group != null ? (group.toMap()['adminId'] as String? ?? '') : '';
+        final groupAdmins = group != null ? List<String>.from(group.toMap()['admins'] ?? []) : <String>[];
 
-        final isGroupAdmin = currentUserId != null && adminId == currentUserId;
+        final isGroupAdmin = currentUserId != null && (adminId == currentUserId || groupAdmins.contains(currentUserId));
         final isPersonal = transaction.groupId == null;
 
         // Permissions:
-        // Admin or Personal/Split group: Can Edit & Delete.
-        // Business group member: Cannot Edit & Delete.
-        final canEditDelete = isPersonal || groupType == 'split' || isGroupAdmin;
-        
-        // Everyone in a Business group (or any group/personal) can toggle type,
-        // but for Business group members it is their ONLY action.
-        final showToggleType = transaction.groupId != null && groupType == 'business';
+        // Business Group & Wages Group: ONLY Admin can Edit, Delete, Repeat, or Toggle Type.
+        // Non-admin members in Business Groups can ONLY VIEW details.
+        final isBusinessGroup = groupType == 'business';
+        final isWagesGroup = groupType == 'wages';
+
+        final canEditDelete = isPersonal || groupType == 'split' || ((isBusinessGroup || isWagesGroup) && isGroupAdmin);
+        final showToggleType = isBusinessGroup && isGroupAdmin;
 
         // Payer Name
         final payerName = transaction.userId == currentUserId 
@@ -195,7 +196,7 @@ class TransactionDetailDialog extends ConsumerWidget {
                         const SizedBox(height: 28),
 
                         // Actions Row
-                        if (canEditDelete)
+                        if (canEditDelete) ...[
                           Row(
                             children: [
                               Expanded(
@@ -273,6 +274,33 @@ class TransactionDetailDialog extends ConsumerWidget {
                               ),
                             ],
                           ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Color(0xFF429690)),
+                                foregroundColor: const Color(0xFF429690),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                              ),
+                              onPressed: () {
+                                Navigator.pop(context);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => AddExpensePage(repeatTransaction: transaction),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.replay_rounded, size: 18),
+                              label: Text(
+                                'Repeat Transaction',
+                                style: GoogleFonts.manrope(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ],
 
                         if (!canEditDelete && showToggleType)
                           SizedBox(
