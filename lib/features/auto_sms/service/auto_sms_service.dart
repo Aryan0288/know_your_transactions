@@ -37,7 +37,7 @@ Future<void> backgroundSmsHandler(SmsMessage message) async {
 class AutoSmsService {
   static final Telephony _telephony = Telephony.instance;
   static const MethodChannel _nativeChannel = MethodChannel(
-    'com.anuj.knowyourexpenses/auto_sms',
+    'com.apps.knowyourexpenses/auto_sms',
   );
 
   /// Initializes SMS listener on app startup if feature is enabled by user.

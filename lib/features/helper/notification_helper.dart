@@ -17,9 +17,8 @@ void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     try {
       // 0. Initialize local notifications for background isolate
-      const AndroidInitializationSettings androidSettings = AndroidInitializationSettings(
-        '@mipmap/ic_launcher',
-      );
+      const AndroidInitializationSettings androidSettings =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
       const InitializationSettings settings = InitializationSettings(
         android: androidSettings,
         iOS: DarwinInitializationSettings(),
@@ -44,26 +43,31 @@ void callbackDispatcher() {
         if (userId != null) {
           await _handleMorningSummary(userId);
         } else {
-          debugPrint("Workmanager: morning-summary skipped because userId is null");
+          debugPrint(
+            "Workmanager: morning-summary skipped because userId is null",
+          );
         }
       } else if (task == "evening-summary") {
         if (userId != null) {
           await NotificationHelper().handleEveningSummary(userId);
         } else {
-          debugPrint("Workmanager: evening-summary skipped because userId is null");
+          debugPrint(
+            "Workmanager: evening-summary skipped because userId is null",
+          );
         }
       }
 
       return true;
     } catch (e) {
       try {
-        const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-          'daily_summary_channel',
-          'Daily Summary',
-          channelDescription: 'Daily spend and available balance summaries',
-          importance: Importance.max,
-          priority: Priority.high,
-        );
+        const AndroidNotificationDetails androidDetails =
+            AndroidNotificationDetails(
+              'daily_summary_channel',
+              'Daily Summary',
+              channelDescription: 'Daily spend and available balance summaries',
+              importance: Importance.max,
+              priority: Priority.high,
+            );
         await flutterLocalNotificationsPlugin.show(
           id: 999,
           title: "Debug: Task Failed",
@@ -182,11 +186,12 @@ class NotificationHelper {
   static Future<void> initialize() async {
     try {
       // 1. Initialize local notifications
-      const AndroidInitializationSettings androidSettings = AndroidInitializationSettings(
-        '@mipmap/ic_launcher',
-      );
+      const AndroidInitializationSettings androidSettings =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
 
-      const InitializationSettings settings = InitializationSettings(android: androidSettings);
+      const InitializationSettings settings = InitializationSettings(
+        android: androidSettings,
+      );
 
       await flutterLocalNotificationsPlugin.initialize(settings: settings);
 
@@ -202,7 +207,9 @@ class NotificationHelper {
       // Request permissions for Android 13+
       if (Platform.isAndroid) {
         flutterLocalNotificationsPlugin
-            .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >()
             ?.requestNotificationsPermission();
       }
 
@@ -297,13 +304,14 @@ class NotificationHelper {
             creatorName = adminDoc.data()?['name'] ?? 'Someone';
           }
 
-          const AndroidNotificationDetails groupCreatedDetails = AndroidNotificationDetails(
-            'group_creation_channel',
-            'Group Creation',
-            channelDescription: 'Notifications when new groups are created',
-            importance: Importance.max,
-            priority: Priority.max,
-          );
+          const AndroidNotificationDetails groupCreatedDetails =
+              AndroidNotificationDetails(
+                'group_creation_channel',
+                'Group Creation',
+                channelDescription: 'Notifications when new groups are created',
+                importance: Importance.max,
+                priority: Priority.max,
+              );
           await flutterLocalNotificationsPlugin.show(
             id: groupDoc.id.hashCode,
             title: "New Group Created! 👥",
@@ -337,7 +345,9 @@ class NotificationHelper {
         }
         if (txDate != null) {
           final txUserId = txData['userId'] as String? ?? '';
-          if (txDate.isAfter(todayStart) && txDate.isBefore(todayEnd) && txUserId != userId) {
+          if (txDate.isAfter(todayStart) &&
+              txDate.isBefore(todayEnd) &&
+              txUserId != userId) {
             groupTransactionsTodayOther.add({
               ...txData,
               'groupName': groupName,
@@ -368,7 +378,8 @@ class NotificationHelper {
         const AndroidNotificationDetails txDetails = AndroidNotificationDetails(
           'group_transactions_channel',
           'Group Transactions',
-          channelDescription: 'Notifications for transactions added by other members',
+          channelDescription:
+              'Notifications for transactions added by other members',
           importance: Importance.max,
           priority: Priority.high,
         );
@@ -401,7 +412,9 @@ class NotificationHelper {
       double amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
       final isShared = data['isShared'] as bool? ?? false;
       final splitWith = List<String>.from(data['splitWith'] ?? []);
-      final splitAmounts = Map<String, dynamic>.from(data['splitAmounts'] ?? {});
+      final splitAmounts = Map<String, dynamic>.from(
+        data['splitAmounts'] ?? {},
+      );
       final isExpense = data['isExpense'] as bool? ?? true;
 
       if (isShared && splitWith.isNotEmpty) {
@@ -428,13 +441,14 @@ class NotificationHelper {
 
     final balance = totalIncome - totalExpense;
 
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'evening_summary_channel',
-      'Evening Summary',
-      channelDescription: 'Today spend and available balance summary',
-      importance: Importance.max,
-      priority: Priority.high,
-    );
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+          'evening_summary_channel',
+          'Evening Summary',
+          channelDescription: 'Today spend and available balance summary',
+          importance: Importance.max,
+          priority: Priority.high,
+        );
 
     final String bodyMessage = todaySpent > 0
         ? "Today's Summary 📊 Today you spent ₹${todaySpent.toStringAsFixed(2)}. Available balance: ₹${balance.toStringAsFixed(2)}."
@@ -451,29 +465,29 @@ class NotificationHelper {
     );
   }
 
-
-
   Future<void> showWelcomeNotification(String userName) async {
     final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-    FlutterLocalNotificationsPlugin();
+        FlutterLocalNotificationsPlugin();
 
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'login_channel', // Channel ID
-      'Authentication Alerts', // Channel Name
-      channelDescription: 'Notifications shown when logging in',
-      importance: Importance.max,
-      priority: Priority.max,
-      ticker: 'ticker',
-    );
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+          'login_channel', // Channel ID
+          'Authentication Alerts', // Channel Name
+          channelDescription: 'Notifications shown when logging in',
+          importance: Importance.max,
+          priority: Priority.max,
+          ticker: 'ticker',
+        );
 
     const NotificationDetails notificationDetails = NotificationDetails(
-      android: androidDetails
+      android: androidDetails,
     );
 
     await flutterLocalNotificationsPlugin.show(
       id: 12, // Notification ID
       title: 'Welcome Back! 👋', // Title
-      body: 'Hi $userName, your Expense Tracker is ready to use.', // Description
+      body:
+          'Hi $userName, your Expense Tracker is ready to use.', // Description
       notificationDetails: notificationDetails,
     );
   }
@@ -481,22 +495,23 @@ class NotificationHelper {
   Future<void> showAddExpenseNotification({
     required double amount,
     required String categoryName,
-    required bool isExpense
+    required bool isExpense,
   }) async {
     final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-    FlutterLocalNotificationsPlugin();
+        FlutterLocalNotificationsPlugin();
 
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'add_expenses_channel', // Channel ID
-      'Add Expenses Alerts', // Channel Name
-      channelDescription: 'Notifications shown when logging in',
-      importance: Importance.max,
-      priority: Priority.max,
-      ticker: 'ticker',
-    );
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+          'add_expenses_channel', // Channel ID
+          'Add Expenses Alerts', // Channel Name
+          channelDescription: 'Notifications shown when logging in',
+          importance: Importance.max,
+          priority: Priority.max,
+          ticker: 'ticker',
+        );
 
     const NotificationDetails notificationDetails = NotificationDetails(
-        android: androidDetails
+      android: androidDetails,
     );
 
     final String title = isExpense
@@ -508,7 +523,9 @@ class NotificationHelper {
         : 'Received ₹${amount.toStringAsFixed(2)} for $categoryName.';
 
     await flutterLocalNotificationsPlugin.show(
-      id: DateTime.now().millisecondsSinceEpoch.remainder(100000), // Notification ID
+      id: DateTime.now().millisecondsSinceEpoch.remainder(
+        100000,
+      ), // Notification ID
       title: title, // Title
       body: body, // Description
       notificationDetails: notificationDetails,
@@ -520,19 +537,21 @@ class NotificationHelper {
     required String body,
   }) async {
     try {
-      const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const AndroidInitializationSettings androidSettings =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
       await flutterLocalNotificationsPlugin.initialize(
         settings: const InitializationSettings(android: androidSettings),
       );
     } catch (_) {}
 
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'auto_sms_channel',
-      'Auto SMS Expenses',
-      channelDescription: 'Notifications for auto-detected SMS expenses',
-      importance: Importance.max,
-      priority: Priority.high,
-    );
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+          'auto_sms_channel',
+          'Auto SMS Expenses',
+          channelDescription: 'Notifications for auto-detected SMS expenses',
+          importance: Importance.max,
+          priority: Priority.high,
+        );
     await flutterLocalNotificationsPlugin.show(
       id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
       title: title,
@@ -540,7 +559,6 @@ class NotificationHelper {
       notificationDetails: const NotificationDetails(android: androidDetails),
     );
   }
-
 
   static Future<void> _schedule9AMReminder() async {
     final tz.TZDateTime scheduledDate = _nextInstanceOfTime(9, 0);

@@ -37,6 +37,9 @@ class AdHelper {
     throw UnsupportedError('Unsupported platform');
   }
 
+  static int _transactionCount = 0;
+  static DateTime? _lastStatsAdTime;
+
   // Preload and display interstitial ad
   static void showInterstitialAd(VoidCallback onDismissed) {
     InterstitialAd.load(
@@ -61,5 +64,29 @@ class AdHelper {
         },
       ),
     );
+  }
+
+  /// Increments transaction counter and shows ad only on the 5th transaction.
+  /// If counter is not 5, executes [onDismissed] immediately without ad.
+  static void show5thTransactionAd(VoidCallback onDismissed) {
+    _transactionCount++;
+    if (_transactionCount >= 5) {
+      _transactionCount = 0;
+      showInterstitialAd(onDismissed);
+    } else {
+      onDismissed();
+    }
+  }
+
+  /// Shows interstitial ad for Stats with a cooldown (default: 10 minutes).
+  /// If cooldown hasn't passed, executes [onDismissed] (or does nothing if null).
+  static void showStatsAdWithCooldown(VoidCallback onDismissed, {Duration cooldown = const Duration(minutes: 10)}) {
+    final now = DateTime.now();
+    if (_lastStatsAdTime == null || now.difference(_lastStatsAdTime!) >= cooldown) {
+      _lastStatsAdTime = now;
+      showInterstitialAd(onDismissed);
+    } else {
+      onDismissed();
+    }
   }
 }

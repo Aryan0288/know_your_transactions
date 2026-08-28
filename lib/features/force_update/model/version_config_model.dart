@@ -35,7 +35,7 @@ class VersionConfigModel {
           target['play_store_url'] as String? ??
           (packageName != null
               ? 'https://play.google.com/store/apps/details?id=$packageName'
-              : 'https://play.google.com/store/apps/details?id=com.anuj.knowyourexpenses'),
+              : 'https://play.google.com/store/apps/details?id=com.apps.knowyourexpenses'),
     );
   }
 }

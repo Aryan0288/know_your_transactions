@@ -75,6 +75,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "89507154805-57qj2o98ug93ucsl8a6g2lvqk3s93bd2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.apps.knowyourexpenses",
+            "certificate_hash": "5c1661c67f3c16b4e35bf58ea616c867136b758b"
+          }
+        },
+        {
           "client_id": "89507154805-5okfd7p0mki10e3q5clo41nemgf6v3oo.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

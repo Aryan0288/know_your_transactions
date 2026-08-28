@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:know_your_expenses/features/transaction/model/model_transaction.dart';
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_group.dart';
+import 'package:know_your_expenses/features/helper/ad_helper.dart';
 
 import 'package:know_your_expenses/features/common_widgets/closable_banner_ad.dart';
 
@@ -84,6 +85,9 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
     );
 
     _entranceController.forward();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AdHelper.showStatsAdWithCooldown(() {});
+    });
   }
 
   @override

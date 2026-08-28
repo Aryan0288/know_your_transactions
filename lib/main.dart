@@ -10,7 +10,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:know_your_expenses/features/helper/notification_helper.dart';
 import 'package:know_your_expenses/features/common_widgets/widget_connectivity_wrapper.dart';
 
-Future<void> _backgroundMessageHandler(RemoteMessage message)async{
+Future<void> _backgroundMessageHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
 }
 
@@ -18,7 +18,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   FirebaseMessaging.onBackgroundMessage(_backgroundMessageHandler);
   await Firebase.initializeApp();
-  
+
   // Initialize AdMob and Notifications
   await MobileAds.instance.initialize();
   await NotificationHelper.initialize();

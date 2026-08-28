@@ -144,33 +144,45 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                   // Section header
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Transactions',
-                                style: GoogleFonts.manrope(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF1E2D2C),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    'Transactions',
+                                    style: GoogleFonts.manrope(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                      color: const Color(0xFF1E2D2C),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              Text(
-                                'History',
-                                style: GoogleFonts.manrope(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w800,
-                                  color: _kGreen,
-                                  height: 1.0,
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    'History',
+                                    style: GoogleFonts.manrope(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                      color: _kGreen,
+                                      height: 1.0,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
+                          const SizedBox(width: 8),
                           Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Consumer(
                                 builder: (context, ref, _) {
@@ -201,8 +213,8 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
 
                                   return Container(
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 14,
-                                      vertical: 6,
+                                      horizontal: 10,
+                                      vertical: 5,
                                     ),
                                     decoration: BoxDecoration(
                                       color: _kGreen.withOpacity(0.12),
@@ -211,7 +223,7 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                                     child: Text(
                                       '$count total',
                                       style: GoogleFonts.manrope(
-                                        fontSize: 13,
+                                        fontSize: 12,
                                         fontWeight: FontWeight.w600,
                                         color: _kGreen,
                                       ),
@@ -219,7 +231,7 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                                   );
                                 },
                               ),
-                              const SizedBox(width: 14),
+                              const SizedBox(width: 10),
                               Consumer(
                                 builder: (context, ref, _) {
                                   return GestureDetector(
@@ -240,7 +252,7 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                                         const Icon(
                                           Icons.picture_as_pdf_rounded,
                                           color: _kGreen,
-                                          size: 24,
+                                          size: 22,
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
@@ -256,7 +268,7 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                                   );
                                 },
                               ),
-                              const SizedBox(width: 14),
+                              const SizedBox(width: 10),
                               Consumer(
                                 builder: (context, ref, _) {
                                   final selectedFilter = ref.watch(selectedHomeGroupIdFilterProvider);
@@ -271,7 +283,7 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                                             const Icon(
                                               Icons.filter_list_rounded,
                                               color: _kGreen,
-                                              size: 24,
+                                              size: 22,
                                             ),
                                             if (selectedFilter != 'all')
                                               Positioned(
@@ -631,43 +643,48 @@ class _AnimatedHeader extends ConsumerWidget {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              greeting,
-                              style: GoogleFonts.manrope(
-                                fontSize: 13,
-                                color: Colors.white70,
-                                fontWeight: FontWeight.w500,
-                                letterSpacing: 0.3,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                greeting,
+                                style: GoogleFonts.manrope(
+                                  fontSize: 13,
+                                  color: Colors.white70,
+                                  fontWeight: FontWeight.w500,
+                                  letterSpacing: 0.3,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 3),
-                            Consumer(
-                              builder: (context, ref, child) {
-                                final user = ref
-                                    .watch(firebaseAuthProvider)
-                                    .currentUser;
-                                user?.reload();
-                                final userData = ref
-                                    .watch(userDataProvider)
-                                    .value;
-                                final userName =
-                                    userData?['name'] ??
-                                    (user != null ? 'User' : 'Guest');
-                                return Text(
-                                  userName,
-                                  style: GoogleFonts.manrope(
-                                    fontSize: 24,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
+                              const SizedBox(height: 3),
+                              Consumer(
+                                builder: (context, ref, child) {
+                                  final user = ref
+                                      .watch(firebaseAuthProvider)
+                                      .currentUser;
+                                  user?.reload();
+                                  final userData = ref
+                                      .watch(userDataProvider)
+                                      .value;
+                                  final userName =
+                                      userData?['name'] ??
+                                      (user != null ? 'User' : 'Guest');
+                                  return Text(
+                                    userName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.manrope(
+                                      fontSize: 24,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 12),
                         Row(
                           children: [
                             Consumer(

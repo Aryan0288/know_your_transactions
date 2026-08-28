@@ -1,4 +1,4 @@
-package com.anuj.knowyourexpenses
+package com.apps.knowyourexpenses
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -10,12 +10,12 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
-    private val CHANNEL = "com.anuj.knowyourexpenses/auto_sms"
+    private val CHANNEL = "com.apps.knowyourexpenses/auto_sms"
     private var methodChannel: MethodChannel? = null
 
     private val smsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == "com.anuj.knowyourexpenses.SMS_RECEIVED_EVENT") {
+            if (intent?.action == "com.apps.knowyourexpenses.SMS_RECEIVED_EVENT") {
                 methodChannel?.invokeMethod("onSmsReceived", null)
             }
         }
@@ -25,7 +25,7 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
 
-        val filter = IntentFilter("com.anuj.knowyourexpenses.SMS_RECEIVED_EVENT")
+        val filter = IntentFilter("com.apps.knowyourexpenses.SMS_RECEIVED_EVENT")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(smsReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {

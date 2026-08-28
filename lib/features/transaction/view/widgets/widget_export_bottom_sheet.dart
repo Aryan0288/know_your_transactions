@@ -9,6 +9,7 @@ import 'package:know_your_expenses/features/home/view_model/view_model_home.dart
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
 import 'package:know_your_expenses/features/helper/utils.dart';
 import 'package:know_your_expenses/features/helper/pdf_helper.dart';
+import 'package:know_your_expenses/features/helper/ad_helper.dart';
 import 'package:know_your_expenses/features/transaction/view/page_pdf_preview.dart';
 import 'package:know_your_expenses/features/home/model/group_model.dart';
 import 'package:know_your_expenses/features/transaction/view/page_split_ledger.dart';
@@ -340,51 +341,53 @@ class ExportBottomSheet extends ConsumerWidget {
                 // Close sheet
                 Navigator.pop(context);
 
-                // 4. Trigger Export
-                final currentUserId = ref.read(firebaseAuthProvider).currentUser?.uid ?? '';
-                final memberNames = ref.read(allGroupsMembersProvider).value ?? {};
+                AdHelper.showInterstitialAd(() async {
+                  // 4. Trigger Export
+                  final currentUserId = ref.read(firebaseAuthProvider).currentUser?.uid ?? '';
+                  final memberNames = ref.read(allGroupsMembersProvider).value ?? {};
 
-                if (exportFormat == 'csv') {
-                  await PdfHelper.exportToCsv(
-                    transactions: filtered,
-                    title: title,
-                    currentUserId: currentUserId,
-                    memberNames: memberNames,
-                  );
-                } else {
-                  // PDF Format
-                  Uint8List bytes;
-                  if (selectedSpace != 'all' && selectedSpace != 'personal') {
-                    final groups = ref.read(userGroupsStreamProvider).value ?? [];
-                    final group = groups.firstWhere((g) => g.id == selectedSpace);
-                    bytes = await PdfHelper.generateGroupStatementBytes(
-                      group: group,
+                  if (exportFormat == 'csv') {
+                    await PdfHelper.exportToCsv(
                       transactions: filtered,
                       title: title,
-                      memberNames: memberNames,
                       currentUserId: currentUserId,
+                      memberNames: memberNames,
                     );
                   } else {
-                    bytes = await PdfHelper.generatePersonalStatementBytes(
-                      transactions: filtered,
-                      title: title,
-                    );
-                  }
+                    // PDF Format
+                    Uint8List bytes;
+                    if (selectedSpace != 'all' && selectedSpace != 'personal') {
+                      final groups = ref.read(userGroupsStreamProvider).value ?? [];
+                      final group = groups.firstWhere((g) => g.id == selectedSpace);
+                      bytes = await PdfHelper.generateGroupStatementBytes(
+                        group: group,
+                        transactions: filtered,
+                        title: title,
+                        memberNames: memberNames,
+                        currentUserId: currentUserId,
+                      );
+                    } else {
+                      bytes = await PdfHelper.generatePersonalStatementBytes(
+                        transactions: filtered,
+                        title: title,
+                      );
+                    }
 
-                  // Open PDF Preview Page
-                  if (context.mounted) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PdfPreviewPage(
-                          pdfBytes: bytes,
-                          filename: "${title.replaceAll(' ', '_')}_Statement.pdf",
-                          title: "$title Statement",
+                    // Open PDF Preview Page
+                    if (context.mounted) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PdfPreviewPage(
+                            pdfBytes: bytes,
+                            filename: "${title.replaceAll(' ', '_')}_Statement.pdf",
+                            title: "$title Statement",
+                          ),
                         ),
-                      ),
-                    );
+                      );
+                    }
                   }
-                }
+                });
               },
               child: Text(
                 'Export Statement',

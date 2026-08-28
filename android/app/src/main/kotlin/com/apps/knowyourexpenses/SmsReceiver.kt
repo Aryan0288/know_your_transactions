@@ -1,4 +1,4 @@
-package com.anuj.knowyourexpenses
+package com.apps.knowyourexpenses
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -195,7 +195,7 @@ class SmsReceiver : BroadcastReceiver() {
     }
 
     private fun notifyFlutterApp(context: Context) {
-        val broadcastIntent = Intent("com.anuj.knowyourexpenses.SMS_RECEIVED_EVENT").apply {
+        val broadcastIntent = Intent("com.apps.knowyourexpenses.SMS_RECEIVED_EVENT").apply {
             setPackage(context.packageName)
         }
         context.sendBroadcast(broadcastIntent)

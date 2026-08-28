@@ -10,6 +10,7 @@ import 'package:know_your_expenses/features/auto_sms/service/auto_sms_service.da
 import 'package:know_your_expenses/features/auto_sms/view_model/auto_sms_provider.dart';
 import 'package:know_your_expenses/features/auto_sms/view/widgets/widget_auto_fill_ledger_sheet.dart';
 import 'package:know_your_expenses/features/helper/utils.dart';
+import 'package:know_your_expenses/features/helper/ad_helper.dart';
 import 'package:know_your_expenses/core/widgets/custom_dialogs.dart';
 import 'package:know_your_expenses/features/login_signup/view/page_sign_in.dart';
 
@@ -67,6 +68,7 @@ class _PageSmsSettingsState extends ConsumerState<PageSmsSettings> {
 
         if (mounted) {
           Utils.showSuccessToast(context, title: 'Auto SMS Expense Tracking Enabled');
+          AdHelper.showInterstitialAd(() {});
         }
       } else {
         if (mounted) {

@@ -50,10 +50,12 @@ class _SplashPageState extends ConsumerState<SplashPage>
       notificationService.requestNotificationPermission();
       notificationService.token();
 
-      FirebaseMessaging.onMessage.listen((RemoteMessage message){
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         final currentUser = FirebaseAuth.instance.currentUser;
         if (currentUser != null) {
-          notificationHelper.handleEveningSummary(currentUser.uid); // 👈 Uses active log-in identity
+          notificationHelper.handleEveningSummary(
+            currentUser.uid,
+          ); // 👈 Uses active log-in identity
         } else {
           print("No user is logged in to fetch transactions!");
         }
@@ -193,7 +195,8 @@ class _SplashPageState extends ConsumerState<SplashPage>
     final user = FirebaseAuth.instance.currentUser;
     await user?.reload();
     final refreshedUser = FirebaseAuth.instance.currentUser;
-    final destination = (refreshedUser != null && isAppAccessGranted(refreshedUser))
+    final destination =
+        (refreshedUser != null && isAppAccessGranted(refreshedUser))
         ? AddExpensePageHomePage()
         : const HomePage();
 

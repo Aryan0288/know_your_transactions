@@ -26,7 +26,7 @@ class ProfileSectionPage extends ConsumerWidget {
         child: Column(
           children: [
             _ProfileHeroSection(ref: ref),
-            const SizedBox(height: 80),
+            const SizedBox(height: 68),
             Consumer(
               builder: (context, ref, child) {
                 final userData = ref.watch(userDataProvider).value;
@@ -297,12 +297,15 @@ class _ProfileHeroSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final topPadding = MediaQuery.of(context).padding.top;
+    final heroHeight = 160.0 + topPadding;
+
     return Stack(
       clipBehavior: Clip.none,
       alignment: Alignment.center,
       children: [
         Container(
-          height: 220,
+          height: heroHeight,
           width: double.infinity,
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -342,11 +345,12 @@ class _ProfileHeroSection extends StatelessWidget {
                 ),
               ),
               SafeArea(
+                bottom: false,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       _HeaderIconButton(
                         icon: Icons.arrow_back_ios_new_rounded,
@@ -362,26 +366,7 @@ class _ProfileHeroSection extends StatelessWidget {
                           color: Colors.white,
                         ),
                       ),
-                      Stack(
-                        children: [
-                          _HeaderIconButton(
-                            icon: Icons.notifications_none_rounded,
-                            onTap: () {},
-                          ),
-                          Positioned(
-                            right: 8,
-                            top: 8,
-                            child: Container(
-                              width: 8,
-                              height: 8,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFFF9900),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                      const SizedBox(width: 40, height: 40),
                     ],
                   ),
                 ),
@@ -390,7 +375,7 @@ class _ProfileHeroSection extends StatelessWidget {
           ),
         ),
         Positioned(
-          bottom: -68,
+          bottom: -56,
           child: Consumer(
             builder: (context, ref, child) {
               final userData = ref.watch(userDataProvider).value;
@@ -449,16 +434,22 @@ class _HeaderIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withOpacity(0.2)),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withOpacity(0.2)),
+          ),
+          child: Icon(icon, color: Colors.white, size: 18),
         ),
-        child: Icon(icon, color: Colors.white, size: 20),
       ),
     );
   }

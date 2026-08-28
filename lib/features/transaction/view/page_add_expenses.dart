@@ -1522,7 +1522,7 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                       // If saving in a wages group, show custom confirmation
                       if (isWagesGroup) {
                         final currentUserId = ref.read(firebaseAuthProvider).currentUser?.uid;
-                        final isAdmin = selectedGroup?.adminId == currentUserId || (selectedGroup?.admins?.contains(currentUserId) ?? false);
+                        final isAdmin = selectedGroup?.adminId == currentUserId || (selectedGroup?.admins.contains(currentUserId) ?? false);
                         if (!isAdmin) {
                           showDialog(
                             context: context,
@@ -1627,7 +1627,7 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                               ? "Transaction Updated Successfully!"
                               : "Transaction Saved Successfully!",
                         );
-                        AdHelper.showInterstitialAd(() {
+                        AdHelper.show5thTransactionAd(() {
                           if (mounted) {
                             Navigator.pop(context);
                           }

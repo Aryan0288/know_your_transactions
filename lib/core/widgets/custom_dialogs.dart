@@ -274,100 +274,182 @@ class CustomDialogs {
     VoidCallback? onSecondaryButtonPressed,
     required Color color,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 30,
-            offset: const Offset(0, 15),
+    final mediaQuery = MediaQuery.of(context);
+    final screenWidth = mediaQuery.size.width;
+    final isSmallScreen = screenWidth < 360;
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 380,
+          maxHeight: mediaQuery.size.height * 0.85,
+        ),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          padding: EdgeInsets.symmetric(
+            horizontal: isSmallScreen ? 18 : 24,
+            vertical: isSmallScreen ? 22 : 28,
           ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              shape: BoxShape.circle,
-              border: Border.all(color: color.withOpacity(0.2), width: 2),
-            ),
-            child: Icon(icon, size: 40, color: color),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            title,
-            style: GoogleFonts.manrope(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: const Color(0xFF1E1E1E),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            description,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.manrope(
-              fontSize: 16,
-              color: Colors.grey[600],
-              height: 1.6,
-            ),
-          ),
-          const SizedBox(height: 32),
-          Row(
-            children: [
-              if (secondaryButtonText != null && onSecondaryButtonPressed != null) ...[
-                Expanded(
-                  child: TextButton(
-                    onPressed: onSecondaryButtonPressed,
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side:  BorderSide(color: Colors.grey[300]!),
-                      ),
-                    ),
-                    child: Text(
-                      secondaryButtonText,
-                      style: GoogleFonts.manrope(
-                        fontSize: 16,
-                        color: const Color(0xFF1E1E1E),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-              ],
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: onPrimaryButtonPressed,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: color,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    primaryButtonText,
-                    style: GoogleFonts.manrope(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.12),
+                blurRadius: 30,
+                offset: const Offset(0, 12),
               ),
             ],
           ),
-        ],
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Container(
+                  padding: EdgeInsets.all(isSmallScreen ? 14 : 18),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: color.withOpacity(0.2), width: 2),
+                  ),
+                  child: Icon(icon, size: isSmallScreen ? 32 : 38, color: color),
+                ),
+                SizedBox(height: isSmallScreen ? 14 : 18),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.manrope(
+                    fontSize: isSmallScreen ? 19 : 22,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF1E1E1E),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  description,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.manrope(
+                    fontSize: isSmallScreen ? 13 : 14.5,
+                    color: Colors.grey[600],
+                    height: 1.5,
+                  ),
+                ),
+                SizedBox(height: isSmallScreen ? 20 : 26),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final hasSecondary = secondaryButtonText != null && onSecondaryButtonPressed != null;
+                    final shouldStack = isSmallScreen || constraints.maxWidth < 270;
+
+                    if (shouldStack && hasSecondary) {
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ElevatedButton(
+                            onPressed: onPrimaryButtonPressed,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: color,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: Text(
+                              primaryButtonText,
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.manrope(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          TextButton(
+                            onPressed: onSecondaryButtonPressed,
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                side: BorderSide(color: Colors.grey[300]!),
+                              ),
+                            ),
+                            child: Text(
+                              secondaryButtonText,
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.manrope(
+                                fontSize: 15,
+                                color: const Color(0xFF1E1E1E),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      children: [
+                        if (hasSecondary) ...[
+                          Expanded(
+                            child: TextButton(
+                              onPressed: onSecondaryButtonPressed,
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  side: BorderSide(color: Colors.grey[300]!),
+                                ),
+                              ),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  secondaryButtonText,
+                                  style: GoogleFonts.manrope(
+                                    fontSize: 14.5,
+                                    color: const Color(0xFF1E1E1E),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: onPrimaryButtonPressed,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: color,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                primaryButtonText,
+                                style: GoogleFonts.manrope(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -383,17 +465,24 @@ class CustomDialogs {
           ),
           backgroundColor: Colors.white,
           child: Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.all(20.0),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const CircularProgressIndicator(color: Color(0xFF429690)),
-                const SizedBox(width: 24),
+                const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: Color(0xFF429690),
+                  ),
+                ),
+                const SizedBox(width: 18),
                 Expanded(
                   child: Text(
                     message,
                     style: GoogleFonts.manrope(
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.w600,
                       color: const Color(0xFF1E1E1E),
                     ),
