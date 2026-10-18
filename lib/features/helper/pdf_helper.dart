@@ -238,7 +238,7 @@ class PdfHelper {
                   t.categoryName.isNotEmpty ? t.categoryName : 'No Category',
                   // truncatedDesc,
                   desc,
-                  t.isExpense ? 'Expense' : 'Income',
+                  t.isExpense ? 'Paid' : 'Received',
                   '${t.amount.toStringAsFixed(2)}',
                 ];
               }).toList(),

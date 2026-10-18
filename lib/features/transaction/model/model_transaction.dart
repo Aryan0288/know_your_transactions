@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:know_your_expenses/features/auto_sms/model/model_pending_sms.dart';
 
 class CategoryModel {
   final String id;
@@ -51,6 +52,11 @@ class TransactionModel {
   final Map<String, double>? splitAmounts;
   final String? groupId;
   final String? paymentMode; // 'cash' or 'online'
+  final String? smsHash; // Unique identifier for Auto-SMS deduplication
+  final String? merchantName;
+  final String? bankAccount;
+  final String? refNumber;
+  final String? rawSmsBody;
 
   TransactionModel({
     required this.id,
@@ -68,6 +74,11 @@ class TransactionModel {
     this.splitAmounts,
     this.groupId,
     this.paymentMode,
+    this.smsHash,
+    this.merchantName,
+    this.bankAccount,
+    this.refNumber,
+    this.rawSmsBody,
   });
 
   Map<String, dynamic> toMap() {
@@ -86,6 +97,11 @@ class TransactionModel {
       'splitAmounts': splitAmounts,
       'groupId': groupId,
       'paymentMode': paymentMode,
+      if (smsHash != null) 'smsHash': smsHash,
+      if (merchantName != null) 'merchantName': merchantName,
+      if (bankAccount != null) 'bankAccount': bankAccount,
+      'refNumber': refNumber ?? '',
+      if (rawSmsBody != null) 'rawSmsBody': rawSmsBody,
     };
   }
 
@@ -110,9 +126,29 @@ class TransactionModel {
           : null,
       groupId: map['groupId'] as String?,
       paymentMode: map['paymentMode'] as String?,
+      smsHash: map['smsHash'] as String?,
+      merchantName: map['merchantName'] as String?,
+      bankAccount: map['bankAccount'] as String?,
+      refNumber: map['refNumber'] as String?,
+      rawSmsBody: map['rawSmsBody'] as String?,
     );
   }
 
   IconData get icon => IconData(iconCodePoint, fontFamily: 'MaterialIcons');
   Color get color => Color(colorValue);
+
+  ModelPendingSms toPendingSms() {
+    return ModelPendingSms(
+      id: smsHash ?? id,
+      amount: amount,
+      vendorName: merchantName ?? 'Unknown',
+      date: date,
+      paymentMode: paymentMode ?? 'online',
+      isExpense: isExpense,
+      rawSmsBody: rawSmsBody ?? '',
+      merchantName: merchantName,
+      bankAccount: bankAccount,
+      refNumber: refNumber,
+    );
+  }
 }

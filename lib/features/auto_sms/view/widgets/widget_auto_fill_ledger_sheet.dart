@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:know_your_expenses/features/auto_sms/model/model_pending_sms.dart';
 import 'package:know_your_expenses/features/auto_sms/view_model/auto_sms_provider.dart';
@@ -9,6 +10,9 @@ import 'package:know_your_expenses/features/transaction/model/model_transaction.
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
 import 'package:know_your_expenses/features/helper/utils.dart';
 import 'package:know_your_expenses/core/widgets/custom_dialogs.dart';
+
+final autoFillSelectedGroupIdProvider = StateProvider.autoDispose<String?>((ref) => null);
+final autoFillSelectedCategoryProvider = StateProvider.autoDispose<CategoryModel?>((ref) => null);
 
 class WidgetAutoFillLedgerSheet extends ConsumerStatefulWidget {
   final ModelPendingSms pendingSms;
@@ -25,9 +29,6 @@ class WidgetAutoFillLedgerSheet extends ConsumerStatefulWidget {
 class _WidgetAutoFillLedgerSheetState extends ConsumerState<WidgetAutoFillLedgerSheet> {
   late TextEditingController _amountController;
   late TextEditingController _descriptionController;
-
-  String? _selectedGroupId; // null means Personal Workspace
-  CategoryModel? _selectedCategory;
 
   @override
   void initState() {
@@ -51,12 +52,14 @@ class _WidgetAutoFillLedgerSheetState extends ConsumerState<WidgetAutoFillLedger
     }
 
     final categories = ref.read(categoriesProvider).value ?? [];
-    final category = _selectedCategory ??
+    final selectedCategory = ref.read(autoFillSelectedCategoryProvider);
+    final selectedGroupId = ref.read(autoFillSelectedGroupIdProvider);
+    final category = selectedCategory ??
         PendingSmsNotifier.getSmartCategory(widget.pendingSms, categories);
 
     await ref.read(pendingSmsListProvider.notifier).assignPendingSms(
           pendingId: widget.pendingSms.id,
-          targetGroupId: _selectedGroupId,
+          targetGroupId: selectedGroupId,
           categoryId: category.id,
           categoryName: category.name,
           iconCodePoint: category.iconCodePoint,
@@ -100,8 +103,14 @@ class _WidgetAutoFillLedgerSheetState extends ConsumerState<WidgetAutoFillLedger
     }).toList();
     final categories = ref.watch(categoriesProvider).value ?? [];
 
-    if (_selectedCategory == null && categories.isNotEmpty) {
-      _selectedCategory = PendingSmsNotifier.getSmartCategory(widget.pendingSms, categories);
+    final currentSelectedCategory = ref.watch(autoFillSelectedCategoryProvider);
+    if (currentSelectedCategory == null && categories.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && ref.read(autoFillSelectedCategoryProvider) == null) {
+          ref.read(autoFillSelectedCategoryProvider.notifier).state =
+              PendingSmsNotifier.getSmartCategory(widget.pendingSms, categories);
+        }
+      });
     }
 
     return Container(
@@ -249,13 +258,14 @@ class _WidgetAutoFillLedgerSheetState extends ConsumerState<WidgetAutoFillLedger
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: categories.map((cat) {
-                  final isSelected = _selectedCategory?.id == cat.id;
+                  final selectedCategory = ref.watch(autoFillSelectedCategoryProvider);
+                  final isSelected = selectedCategory?.id == cat.id;
                   return Padding(
                     padding: const EdgeInsets.only(right: 8.0),
                     child: ChoiceChip(
                       selected: isSelected,
                       avatar: Icon(
-                        IconData(cat.iconCodePoint, fontFamily: 'MaterialIcons'),
+                        cat.icon,
                         size: 16,
                         color: isSelected ? Colors.white : Color(cat.colorValue),
                       ),
@@ -268,9 +278,7 @@ class _WidgetAutoFillLedgerSheetState extends ConsumerState<WidgetAutoFillLedger
                         color: isSelected ? Colors.white : const Color(0xFF1A2332),
                       ),
                       onSelected: (_) {
-                        setState(() {
-                          _selectedCategory = cat;
-                        });
+                        ref.read(autoFillSelectedCategoryProvider.notifier).state = cat;
                       },
                     ),
                   );
@@ -294,42 +302,48 @@ class _WidgetAutoFillLedgerSheetState extends ConsumerState<WidgetAutoFillLedger
               child: Row(
                 children: [
                   // Personal option
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: FilterChip(
-                      selected: _selectedGroupId == null,
-                      label: Text('👤 Personal', style: GoogleFonts.manrope(fontWeight: FontWeight.bold)),
-                      selectedColor: const Color(0xFF429690),
-                      labelStyle: TextStyle(
-                        color: _selectedGroupId == null ? Colors.white : const Color(0xFF1A2332),
-                      ),
-                      onSelected: (_) {
-                        setState(() {
-                          _selectedGroupId = null;
-                        });
-                      },
-                    ),
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final selectedGroupId = ref.watch(autoFillSelectedGroupIdProvider);
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8.0),
+                        child: FilterChip(
+                          selected: selectedGroupId == null,
+                          label: Text('👤 Personal', style: GoogleFonts.manrope(fontWeight: FontWeight.bold)),
+                          selectedColor: const Color(0xFF429690),
+                          labelStyle: TextStyle(
+                            color: selectedGroupId == null ? Colors.white : const Color(0xFF1A2332),
+                          ),
+                          onSelected: (_) {
+                            ref.read(autoFillSelectedGroupIdProvider.notifier).state = null;
+                          },
+                        ),
+                      );
+                    },
                   ),
                   ...groups.map((group) {
-                    final isSelected = _selectedGroupId == group.id;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: FilterChip(
-                        selected: isSelected,
-                        label: Text(
-                          '👥 ${group.name}',
-                          style: GoogleFonts.manrope(fontWeight: FontWeight.bold),
-                        ),
-                        selectedColor: const Color(0xFF429690),
-                        labelStyle: TextStyle(
-                          color: isSelected ? Colors.white : const Color(0xFF1A2332),
-                        ),
-                        onSelected: (_) {
-                          setState(() {
-                            _selectedGroupId = group.id;
-                          });
-                        },
-                      ),
+                    return Consumer(
+                      builder: (context, ref, _) {
+                        final selectedGroupId = ref.watch(autoFillSelectedGroupIdProvider);
+                        final isSelected = selectedGroupId == group.id;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: FilterChip(
+                            selected: isSelected,
+                            label: Text(
+                              '👥 ${group.name}',
+                              style: GoogleFonts.manrope(fontWeight: FontWeight.bold),
+                            ),
+                            selectedColor: const Color(0xFF429690),
+                            labelStyle: TextStyle(
+                              color: isSelected ? Colors.white : const Color(0xFF1A2332),
+                            ),
+                            onSelected: (_) {
+                              ref.read(autoFillSelectedGroupIdProvider.notifier).state = group.id;
+                            },
+                          ),
+                        );
+                      },
                     );
                   }),
                 ],

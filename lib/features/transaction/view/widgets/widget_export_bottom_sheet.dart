@@ -225,11 +225,11 @@ class ExportBottomSheet extends ConsumerWidget {
                 ref.read(exportTransactionTypeProvider.notifier).state = 'all';
               }),
               const SizedBox(width: 8),
-              _buildSegmentChip('Expenses Only', transactionType == 'expense', () {
+              _buildSegmentChip('Paid Only', transactionType == 'expense', () {
                 ref.read(exportTransactionTypeProvider.notifier).state = 'expense';
               }),
               const SizedBox(width: 8),
-              _buildSegmentChip('Income Only', transactionType == 'income', () {
+              _buildSegmentChip('Received Only', transactionType == 'income', () {
                 ref.read(exportTransactionTypeProvider.notifier).state = 'income';
               }),
             ],

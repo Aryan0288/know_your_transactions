@@ -6,9 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:know_your_expenses/features/transaction/model/model_transaction.dart';
 import 'package:know_your_expenses/features/transaction/view_model/view_model_transaction.dart';
+import 'package:know_your_expenses/features/transaction/view/dialog_transaction_detail.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_group.dart';
-import 'package:know_your_expenses/features/helper/ad_helper.dart';
-
 import 'package:know_your_expenses/features/common_widgets/closable_banner_ad.dart';
 
 // ─── Colours ──────────────────────────────────────────────────────────────────
@@ -85,9 +84,6 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
     );
 
     _entranceController.forward();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      AdHelper.showStatsAdWithCooldown(() {});
-    });
   }
 
   @override
@@ -121,14 +117,55 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
                 child: Consumer(
                   builder: (context, ref, _) {
                     final topSpending = ref.watch(topSpendingProvider);
+                    final touchedIndex = ref.watch(touchedIndexProvider);
+                    final type = ref.watch(statisticsTypeProvider);
+                    final isExpense = type == StatisticsType.expense;
+
+                    final Map<String, double> categoryTotals = {};
+                    final Map<String, Color> categoryColors = {};
+                    for (var t in topSpending) {
+                      if (t.isExpense != isExpense) continue;
+                      categoryTotals[t.categoryName] =
+                          (categoryTotals[t.categoryName] ?? 0) + t.amount;
+                      categoryColors[t.categoryName] = t.color;
+                    }
+                    final categories = categoryTotals.keys.toList();
+
+                    String? selectedCategory;
+                    double selectedCategoryTotal = 0.0;
+                    Color? selectedCategoryColor;
+                    if (touchedIndex != -1 && touchedIndex < categories.length) {
+                      selectedCategory = categories[touchedIndex];
+                      selectedCategoryTotal = categoryTotals[selectedCategory] ?? 0.0;
+                      selectedCategoryColor = categoryColors[selectedCategory] ??
+                          _vibrantColors[touchedIndex % _vibrantColors.length];
+                    }
+
+                    final displayedTransactions = selectedCategory == null
+                        ? topSpending
+                        : topSpending
+                            .where((t) => t.categoryName == selectedCategory)
+                            .toList();
+
                     return ListView(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
                       children: [
                         _buildChartCard(context, ref, topSpending),
                         const SizedBox(height: 20),
-                        _buildTopSpendingHeader(ref, topSpending.length),
+                        _buildTopSpendingHeader(
+                          ref,
+                          totalCount: topSpending.length,
+                          displayedCount: displayedTransactions.length,
+                          selectedCategory: selectedCategory,
+                          selectedCategoryTotal: selectedCategoryTotal,
+                          selectedCategoryColor: selectedCategoryColor,
+                        ),
                         const SizedBox(height: 12),
-                        ..._buildTopSpendingItems(topSpending),
+                        ..._buildTopSpendingItems(
+                          context,
+                          displayedTransactions,
+                          selectedCategory: selectedCategory,
+                        ),
                       ],
                     );
                   },
@@ -149,7 +186,7 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
     final selectedType = ref.watch(statisticsTypeProvider);
 
     final isDefault = selectedGroup == 'all' &&
-        selectedPeriod == StatisticsPeriod.week &&
+        selectedPeriod == StatisticsPeriod.all &&
         selectedType == StatisticsType.expense;
 
     return Stack(
@@ -295,7 +332,7 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final itemWidth = constraints.maxWidth / 4;
+          final itemWidth = constraints.maxWidth / StatisticsPeriod.values.length;
           return Stack(
             children: [
               AnimatedPositioned(
@@ -342,7 +379,7 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
                             fontWeight: isSelected
                                 ? FontWeight.w700
                                 : FontWeight.w500,
-                            fontSize: 13,
+                            fontSize: 12,
                           ),
                           child: Text(_getPeriodTitle(period)),
                         ),
@@ -360,19 +397,23 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
 
   double _getLeftOffset(StatisticsPeriod period, double width) {
     switch (period) {
-      case StatisticsPeriod.day:
+      case StatisticsPeriod.all:
         return 0;
-      case StatisticsPeriod.week:
+      case StatisticsPeriod.day:
         return width;
-      case StatisticsPeriod.month:
+      case StatisticsPeriod.week:
         return width * 2;
-      case StatisticsPeriod.year:
+      case StatisticsPeriod.month:
         return width * 3;
+      case StatisticsPeriod.year:
+        return width * 4;
     }
   }
 
   String _getPeriodTitle(StatisticsPeriod period) {
     switch (period) {
+      case StatisticsPeriod.all:
+        return 'All';
       case StatisticsPeriod.day:
         return 'Day';
       case StatisticsPeriod.week:
@@ -439,7 +480,7 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
                       behavior: HitTestBehavior.opaque,
                       child: Center(
                         child: Text(
-                          'Expense',
+                          'You Paid',
                           style: GoogleFonts.manrope(
                             color: selectedType == StatisticsType.expense
                                 ? Colors.white
@@ -464,7 +505,7 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
                       behavior: HitTestBehavior.opaque,
                       child: Center(
                         child: Text(
-                          'Income',
+                          'You Received',
                           style: GoogleFonts.manrope(
                             color: selectedType == StatisticsType.income
                                 ? Colors.white
@@ -793,9 +834,18 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
   }
 
   // ─── Top Spending Header ──────────────────────────────────────────────────
-  Widget _buildTopSpendingHeader(WidgetRef ref, int count) {
+  Widget _buildTopSpendingHeader(
+    WidgetRef ref, {
+    required int totalCount,
+    required int displayedCount,
+    String? selectedCategory,
+    double selectedCategoryTotal = 0.0,
+    Color? selectedCategoryColor,
+  }) {
     final type = ref.watch(statisticsTypeProvider);
     final isExpense = type == StatisticsType.expense;
+    final isFiltered = selectedCategory != null;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Row(
@@ -804,46 +854,115 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
             width: 4,
             height: 20,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
+              gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [_kLightGreen, _kDeepGreen],
+                colors: isFiltered && selectedCategoryColor != null
+                    ? [selectedCategoryColor, selectedCategoryColor.withOpacity(0.7)]
+                    : [_kLightGreen, _kDeepGreen],
               ),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           const SizedBox(width: 10),
-          Text(
-            isExpense ? 'Top Spending' : 'Top Income',
-            style: GoogleFonts.manrope(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF1E2D2C),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  isFiltered
+                      ? selectedCategory
+                      : (isExpense ? 'Top Spending' : 'Top Income'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.manrope(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF1E2D2C),
+                  ),
+                ),
+                if (isFiltered)
+                  Text(
+                    '₹${selectedCategoryTotal.toStringAsFixed(2)} · $displayedCount ${displayedCount == 1 ? 'item' : 'items'}',
+                    style: GoogleFonts.manrope(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: selectedCategoryColor ?? _kGreen,
+                    ),
+                  ),
+              ],
             ),
           ),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: _kGreen.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '$count items',
-              style: GoogleFonts.manrope(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: _kGreen,
+          const SizedBox(width: 8),
+          if (isFiltered)
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                ref.read(touchedIndexProvider.notifier).state = -1;
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'View All',
+                      style: GoogleFonts.manrope(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.close_rounded,
+                      size: 14,
+                      color: Colors.grey.shade700,
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: _kGreen.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '$totalCount items',
+                style: GoogleFonts.manrope(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: _kGreen,
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
   }
 
   // ─── Top Spending Items ───────────────────────────────────────────────────
-  List<Widget> _buildTopSpendingItems(List<TransactionModel> transactions) {
+  List<Widget> _buildTopSpendingItems(
+    BuildContext context,
+    List<TransactionModel> transactions, {
+    String? selectedCategory,
+  }) {
     if (transactions.isEmpty) {
       return [
         Padding(
@@ -858,7 +977,10 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
               ),
               const SizedBox(height: 12),
               Text(
-                'No data found',
+                selectedCategory != null
+                    ? 'No transactions for $selectedCategory in this period'
+                    : 'No data found',
+                textAlign: TextAlign.center,
                 style: GoogleFonts.manrope(
                   fontSize: 14,
                   color: Colors.grey.shade400,
@@ -876,73 +998,104 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage>
       final t = transactions[index];
       if (index > 0) items.add(const SizedBox(height: 10));
       items.add(
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: t.color.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(14),
+        InkWell(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            showDialog(
+              context: context,
+              builder: (ctx) => TransactionDetailDialog(transaction: t),
+            );
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
                 ),
-                child: Icon(t.icon, color: t.color, size: 24),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      t.categoryName,
-                      style: GoogleFonts.manrope(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF1E2D2C),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: t.color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(t.icon, color: t.color, size: 24),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        t.description.isNotEmpty ? t.description : t.categoryName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.manrope(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF1E2D2C),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      DateFormat('MMM d, yyyy').format(t.date),
-                      style: GoogleFonts.manrope(
-                        fontSize: 12,
-                        color: Colors.grey.shade400,
-                        fontWeight: FontWeight.w500,
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          if (t.description.isNotEmpty) ...[
+                            Text(
+                              t.categoryName,
+                              style: GoogleFonts.manrope(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: t.color,
+                              ),
+                            ),
+                            Text(
+                              ' · ',
+                              style: TextStyle(color: Colors.grey.shade400),
+                            ),
+                          ],
+                          Text(
+                            DateFormat('MMM d, yyyy').format(t.date),
+                            style: GoogleFonts.manrope(
+                              fontSize: 12,
+                              color: Colors.grey.shade400,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: t.isExpense
-                      ? const Color(0xFFEA3636).withOpacity(0.08)
-                      : const Color(0xFF2E8B57).withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '${t.isExpense ? '-' : '+'}₹${t.amount.toStringAsFixed(2)}',
-                  style: GoogleFonts.manrope(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: t.isExpense ? const Color(0xFFEA3636) : const Color(0xFF2E8B57),
+                    ],
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: t.isExpense
+                        ? const Color(0xFFEA3636).withOpacity(0.08)
+                        : const Color(0xFF2E8B57).withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${t.isExpense ? '-' : '+'}₹${t.amount.toStringAsFixed(2)}',
+                    style: GoogleFonts.manrope(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: t.isExpense ? const Color(0xFFEA3636) : const Color(0xFF2E8B57),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -1025,7 +1178,7 @@ class _StatsFilterBottomSheet extends ConsumerWidget {
               TextButton(
                 onPressed: () {
                   ref.read(selectedStatsGroupIdFilterProvider.notifier).state = 'all';
-                  ref.read(selectedPeriodProvider.notifier).state = StatisticsPeriod.week;
+                  ref.read(selectedPeriodProvider.notifier).state = StatisticsPeriod.all;
                   ref.read(statisticsTypeProvider.notifier).state = StatisticsType.expense;
                   Navigator.pop(context);
                 },
@@ -1169,7 +1322,7 @@ class _StatsFilterBottomSheet extends ConsumerWidget {
           Row(
             children: StatisticsType.values.map((type) {
               final isSelected = selectedType == type;
-              final name = type == StatisticsType.expense ? 'Expenses' : 'Income';
+              final name = type == StatisticsType.expense ? 'You Paid' : 'You Received';
               return Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),

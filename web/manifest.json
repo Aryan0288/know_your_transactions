@@ -1,6 +1,6 @@
 {
-    "name": "know_your_expenses",
-    "short_name": "know_your_expenses",
+    "name": "Know Your Expenses",
+    "short_name": "Know Your Expenses",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

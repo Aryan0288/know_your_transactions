@@ -358,13 +358,13 @@ class SplitLedgerPage extends ConsumerWidget {
                     ? ref.watch(groupSplitBalancesProvider(selectedGroupId))
                     : <SplitBalance>[];
 
-                String tab0Text = 'Expenses';
+                String tab0Text = 'You Paid';
                 if (selectedGroupId == null) {
                   tab0Text = 'Spaces';
                 } else if (selectedMemberId == null) {
                   tab0Text = isWages ? 'Employees' : 'Members';
                 } else {
-                  tab0Text = isWages ? 'Income' : 'Expenses';
+                  tab0Text = isWages ? 'You Received' : 'You Paid';
                 }
 
                 // Filter groups for rendering

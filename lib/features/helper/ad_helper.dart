@@ -38,15 +38,28 @@ class AdHelper {
   }
 
   static int _transactionCount = 0;
-  static DateTime? _lastStatsAdTime;
+  static DateTime? _lastInterstitialShownTime;
+  static const Duration _globalInterstitialCooldown = Duration(minutes: 3);
 
-  // Preload and display interstitial ad
-  static void showInterstitialAd(VoidCallback onDismissed) {
+  /// Preload and display interstitial ad with global cooldown protection.
+  static void showInterstitialAd(
+    VoidCallback onDismissed, {
+    Duration cooldown = _globalInterstitialCooldown,
+    bool force = false,
+  }) {
+    final now = DateTime.now();
+    if (!force && _lastInterstitialShownTime != null && now.difference(_lastInterstitialShownTime!) < cooldown) {
+      // Cooldown active, skip ad gracefully without interrupting user flow
+      onDismissed();
+      return;
+    }
+
     InterstitialAd.load(
       adUnitId: interstitialAdUnitId,
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
+          _lastInterstitialShownTime = DateTime.now();
           ad.fullScreenContentCallback = FullScreenContentCallback(
             onAdDismissedFullScreenContent: (ad) {
               ad.dispose();
@@ -78,15 +91,9 @@ class AdHelper {
     }
   }
 
-  /// Shows interstitial ad for Stats with a cooldown (default: 10 minutes).
-  /// If cooldown hasn't passed, executes [onDismissed] (or does nothing if null).
+  /// Shows interstitial ad for Stats with a cooldown.
   static void showStatsAdWithCooldown(VoidCallback onDismissed, {Duration cooldown = const Duration(minutes: 10)}) {
-    final now = DateTime.now();
-    if (_lastStatsAdTime == null || now.difference(_lastStatsAdTime!) >= cooldown) {
-      _lastStatsAdTime = now;
-      showInterstitialAd(onDismissed);
-    } else {
-      onDismissed();
-    }
+    onDismissed();
   }
 }
+

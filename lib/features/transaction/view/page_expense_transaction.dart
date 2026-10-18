@@ -20,6 +20,7 @@ import 'package:know_your_expenses/features/transaction/view/dialog_quick_add_am
 import 'package:know_your_expenses/features/home/view_model/view_model_group.dart';
 import 'package:know_your_expenses/features/auto_sms/service/auto_sms_service.dart';
 import 'package:know_your_expenses/features/auto_sms/view_model/auto_sms_provider.dart';
+import 'package:know_your_expenses/features/auto_sms/view/widgets/widget_auto_sms_onboarding_sheet.dart';
 
 // ─── Colours ─────────────────────────────────────────────────────────────────
 const _kGreen = Color(0xFF2E8B57);
@@ -104,14 +105,16 @@ class _AddExpensePageHomePageState extends ConsumerState<AddExpensePageHomePage>
     _shakeDetector.startListening();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AutoSmsService.initializeOnAppStart(ref);
+      AutoSmsOnboardingHelper.checkAndPromptOnboarding(context, ref);
     });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // When app comes back to foreground, reload SMS written by native Kotlin receiver
+    // When app comes back to foreground, reload SMS written by native Kotlin receiver & sync permission state
     if (state == AppLifecycleState.resumed) {
       ref.read(pendingSmsListProvider.notifier).reloadFromPrefs();
+      AutoSmsService.syncStateWithPermission(ref);
     }
   }
 

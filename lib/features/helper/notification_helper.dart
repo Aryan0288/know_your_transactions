@@ -363,7 +363,7 @@ class NotificationHelper {
       if (groupType == 'business') {
         final txUserId = tx['userId'] as String;
         final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
-        final description = tx['description'] ?? 'Expense';
+        final description = tx['description'] ?? 'Transaction';
         final groupName = tx['groupName'] ?? 'Group';
 
         String memberName = 'Someone';

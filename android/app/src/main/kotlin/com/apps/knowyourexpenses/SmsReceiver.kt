@@ -7,10 +7,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Telephony
 import androidx.core.app.NotificationCompat
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -26,38 +25,80 @@ class SmsReceiver : BroadcastReceiver() {
         private const val PREFS_NAME = "FlutterSharedPreferences"
         private const val KEY_ENABLED = "flutter.auto_sms_enabled"
         private const val KEY_PENDING = "flutter.pending_auto_sms_items"
+        private const val KEY_SYNCED = "flutter.synced_sms_hashes"
+        private const val KEY_DISCARDED = "flutter.discarded_sms_hashes"
 
         private val DEBIT_KEYWORDS = listOf(
-            "debited", "paid to", "spent", "sent to",
-            "txn of rs", "transaction of rs", "vpa", "upi/p2m", "upi/p2a",
-            "paid at", "payment of", "purchase of", "transferred", "withdrawn",
-            "charged", "txn of inr"
+            "debited", "paid", "spent", "sent", "transferred", "transfer of", "withdrawn", "withdrawal",
+            "charged", "purchase", "txn of", "transaction of", "dr-rs", "dr.", "dr ",
+            "imps", "neft", "rtgs", "recharge", "bill payment", "autopay", "mandate",
+            "sip", "mutual fund", "investment", "vpa", "upi/p2m", "upi/p2a", "used at",
+            "swiped at", "pos txn", "atm wdl", "deducted", "auto-debit", "auto debit"
         )
         private val CREDIT_KEYWORDS = listOf(
-            "credited", "received rs", "added to account", "deposited"
+            "credited", "received", "added to account", "added to your account",
+            "deposited", "cr-rs", "cr.", "cr ", "refund", "cashback", "salary",
+            "interest credited", "dividend", "reversed"
         )
-        private val SPAM_KEYWORDS = listOf("otp", "secret code", "verification code")
+        private val SPAM_KEYWORDS = listOf(
+            "otp", "secret code", "verification code", "do not share", "one time password",
+            "failed", "declined", "unsuccessful", "could not be processed",
+            "pre-approved", "pre approved", "apply now", "click here", "avail loan", "loan approved",
+            "credit limit is", "congratulations", "special offer", "exclusive offer",
+            "request to pay", "requested money", "request received", "due date is", "bill generated",
+            "payment due", "will be debited on"
+        )
         private val SELF_TRANSFER_KEYWORDS = listOf(
             "self transfer", "transfer to own a/c", "own account transfer"
         )
 
-        private val AMOUNT_PATTERN = Pattern.compile(
-            """(?:rs\.?|inr\.?|₹)\s*([\d,]+(?:\.\d{1,2})?)""", Pattern.CASE_INSENSITIVE
+        private val BALANCE_STRIP_PATTERN = Pattern.compile(
+            """(?:bal|balance|avail\s*bal|avbl\s*bal|avl\s*bal|limit)[\s:]*(?:rs\.?|inr\.?|₹)?\s*[\d,]+(?:\.\d+)?""",
+            Pattern.CASE_INSENSITIVE
         )
+
+        private val AMOUNT_ACTION_PATTERN = Pattern.compile(
+            """(?:debited|credited|spent|transferred|withdrawn|charged|paid|sent|deposited|refunded)\s+(?:by|for|with|of)?\s*(?:rs\.?|inr\.?|₹)?\s*([\d,]+(?:\.\d{1,2})?)""",
+            Pattern.CASE_INSENSITIVE
+        )
+
+        private val AMOUNT_CURRENCY_PATTERN = Pattern.compile(
+            """(?:amt\.?\s*|amount\s*|txn\s*of\s*|sip\s*of\s*)?(?:rs\.?|inr\.?|₹)\s*[\:\-]?\s*([\d,]+(?:\.\d{1,2})?)""",
+            Pattern.CASE_INSENSITIVE
+        )
+
+        private val AMOUNT_TRAILING_PATTERN = Pattern.compile(
+            """([\d,]+(?:\.\d{1,2})?)\s*(?:rs\.?|inr\.?|₹)\s*(?:debited|credited|spent|withdrawn|paid)?""",
+            Pattern.CASE_INSENSITIVE
+        )
+
         private val REF_PATTERN = Pattern.compile(
-            """(?:upi|ref|ref\s*no|rrn|txn\s*id|info)[\:\/\s\-]*([a-zA-Z0-9]{6,25})""",
+            """(?:upi\s*ref(?:\s*no)?|rrn|txn\s*(?:id|#|no)?|ref\s*no|ref|imps(?:\s*ref)?|neft(?:\s*ref)?|utr)[\:\/\s\-#]*([a-zA-Z0-9]{6,25})""",
             Pattern.CASE_INSENSITIVE
         )
-        private val DATE_PATTERN = Pattern.compile(
-            """(?:dt|date|on)?\s*(\d{2}[\/\-]\d{2}[\/\-]\d{2,4}(?:\s+\d{2}:\d{2}(?::\d{2})?)?)""",
+
+        private val DATE_TEXT_PATTERN = Pattern.compile(
+            """(\d{1,2})[\s\/\-]?([a-zA-Z]{3})[\s\/\-]?(\d{2,4})(?:\s+(\d{1,2}:\d{2}(?::\d{2})?(?:\s*(?:am|pm|AM|PM))?))?""",
             Pattern.CASE_INSENSITIVE
         )
+
+        private val DATE_NUMERIC_PATTERN = Pattern.compile(
+            """(?:dt|date|on)?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?)""",
+            Pattern.CASE_INSENSITIVE
+        )
+
         private val VENDOR_TO_PATTERN = Pattern.compile(
-            """(?:to|paid to|sent to)\s+([A-Za-z0-9\s._-]+?)(?:\s+(?:thru|through|via|using|by|towards|on|ref|vpa|upi|avail|bal|a/c|dt|date)|$)""",
+            """(?:to|paid to|sent to|transfer to|transferred to)\s+([A-Za-z0-9\s._-]+?)(?:\s+(?:thru|through|via|using|by|towards|on|ref|vpa|upi|avail|bal|a/c|dt|date|is|\:|\.|$))""",
             Pattern.CASE_INSENSITIVE
         )
+
         private val VENDOR_AT_PATTERN = Pattern.compile(
-            """(?:at|for|towards|merchant)\s+([A-Za-z0-9\s._-]+?)(?:\s+(?:thru|through|via|ref|vpa|upi|avail|bal|a/c|dt|date)|$)""",
+            """(?:at|towards|merchant|info|spent at|used at|for)\s+([A-Za-z0-9\s._-]+?)(?:\s+(?:thru|through|via|ref|vpa|upi|avail|bal|a/c|dt|date|is|\:|\.|$))""",
+            Pattern.CASE_INSENSITIVE
+        )
+
+        private val VPA_PATTERN = Pattern.compile(
+            """([A-Za-z0-9._-]+)@(?:upi|ybl|paytm|icici|axis|okicici|okhdfcbank|okaxis|sbi|ibl|idfcbank)""",
             Pattern.CASE_INSENSITIVE
         )
     }
@@ -65,118 +106,61 @@ class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
 
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val isEnabled = prefs.getBoolean(KEY_ENABLED, false)
-        if (!isEnabled) return
+        val pendingResult = goAsync()
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        val wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "KnowYourExpenses:SmsReceiverWakeLock")
+        wakeLock?.acquire(10000) // 10 seconds timeout
 
-        val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
-        for (sms in messages) {
-            val body = sms.messageBody ?: continue
-            val parsed = parseSms(body) ?: continue
-
-            val currentUser = FirebaseAuth.getInstance().currentUser
-            val userId = currentUser?.uid
-
-            if (userId != null) {
-                val db = FirebaseFirestore.getInstance()
-                db.collection("groups")
-                    .whereArrayContains("members", userId)
-                    .get()
-                    .addOnSuccessListener { querySnapshot ->
-                        val userGroups = querySnapshot.documents.filter { doc ->
-                            val type = doc.getString("type")
-                            if (type == "wages") {
-                                val adminId = doc.getString("adminId")
-                                val admins = doc.get("admins") as? List<*>
-                                adminId == userId || (admins != null && admins.contains(userId))
-                            } else {
-                                true
+        Thread {
+            try {
+                val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                val isEnabled = prefs.getBoolean(KEY_ENABLED, false)
+                if (isEnabled) {
+                    val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
+                    if (messages != null) {
+                        val fullBody = messages.joinToString("") { it.messageBody ?: "" }
+                        if (fullBody.isNotEmpty()) {
+                            val sender = messages.firstOrNull()?.originatingAddress ?: ""
+                            val parsed = parseSms(fullBody, sender)
+                            if (parsed != null) {
+                                saveToPending(prefs, parsed, context)
                             }
                         }
-
-                        if (userGroups.isEmpty()) {
-                            // 🟢 Case A: 0 Groups -> Instant Native Firestore Write to Personal Workspace
-                            val amount = parsed.optDouble("amount", 0.0)
-                            val vendor = parsed.optString("vendorName", "Unknown")
-                            val isExpense = parsed.optBoolean("isExpense", true)
-                            val paymentMode = parsed.optString("paymentMode", "online")
-                            val dateStr = parsed.optString("date", currentIso())
-                            val categoryMap = getCategoryForSms(isExpense, vendor)
-
-                            val txnMap = hashMapOf<String, Any?>(
-                                "amount" to amount,
-                                "description" to vendor,
-                                "categoryId" to categoryMap["id"],
-                                "categoryName" to categoryMap["name"],
-                                "iconCodePoint" to categoryMap["iconCodePoint"],
-                                "colorValue" to categoryMap["colorValue"],
-                                "date" to dateStr,
-                                "userId" to userId,
-                                "isExpense" to isExpense,
-                                "isShared" to false,
-                                "splitWith" to null,
-                                "splitAmounts" to null,
-                                "groupId" to null,
-                                "paymentMode" to paymentMode
-                            )
-
-                            db.collection("users").document(userId).collection("transactions")
-                                .add(txnMap)
-                                .addOnSuccessListener {
-                                    val label = if (isExpense) "Expense" else "Income"
-                                    showNotification(context,
-                                        title = "Auto-Added $label",
-                                        body = "Rs.${"%.2f".format(amount)} at $vendor to Personal Space"
-                                    )
-                                    notifyFlutterApp(context)
-                                }
-                        } else {
-                            // 🟡 Case B: Multi-group user -> Save to pending queue in SharedPreferences
-                            saveToPending(prefs, parsed, context)
-                        }
                     }
-                    .addOnFailureListener {
-                        saveToPending(prefs, parsed, context)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                try {
+                    if (wakeLock != null && wakeLock.isHeld) {
+                        wakeLock.release()
                     }
-            } else {
-                saveToPending(prefs, parsed, context)
+                } catch (_: Exception) {}
+                pendingResult.finish()
             }
-        }
-    }
-
-    private fun getCategoryForSms(isExpense: Boolean, vendor: String): Map<String, Any> {
-        if (!isExpense) {
-            return mapOf(
-                "id" to "online",
-                "name" to "Online",
-                "iconCodePoint" to 59654,
-                "colorValue" to 0xFF429690.toInt()
-            )
-        }
-        val lowerVendor = vendor.lowercase(Locale.getDefault())
-        return when {
-            lowerVendor.contains("zomato") || lowerVendor.contains("swiggy") || lowerVendor.contains("restaurant") || lowerVendor.contains("food") || lowerVendor.contains("cafe") ->
-                mapOf("id" to "food", "name" to "Food", "iconCodePoint" to 58732, "colorValue" to 0xFFFFA726.toInt())
-            lowerVendor.contains("uber") || lowerVendor.contains("ola") || lowerVendor.contains("rapido") || lowerVendor.contains("metro") || lowerVendor.contains("fuel") ->
-                mapOf("id" to "transport", "name" to "Transport", "iconCodePoint" to 58673, "colorValue" to 0xFF42A5F5.toInt())
-            lowerVendor.contains("amazon") || lowerVendor.contains("flipkart") || lowerVendor.contains("myntra") || lowerVendor.contains("mart") ->
-                mapOf("id" to "shopping", "name" to "Shopping", "iconCodePoint" to 58780, "colorValue" to 0xFFEC407A.toInt())
-            else ->
-                mapOf("id" to "other", "name" to "Other", "iconCodePoint" to 58343, "colorValue" to 0xFF9E9E9E.toInt())
-        }
+        }.start()
     }
 
     private fun saveToPending(prefs: android.content.SharedPreferences, parsed: JSONObject, context: Context) {
+        val hashId = parsed.optString("id")
+
+        // 1. Check synced registry in SharedPreferences (stored as JSON array by Flutter)
+        val syncedJson = prefs.getString(KEY_SYNCED, null)
+        if (syncedJson != null && syncedJson.contains(hashId)) return
+
+        // 2. Check discarded registry in SharedPreferences
+        val discardedJson = prefs.getString(KEY_DISCARDED, null)
+        if (discardedJson != null && discardedJson.contains(hashId)) return
+
+        // 3. Check existing pending list
         val existingJson = prefs.getString(KEY_PENDING, "[]") ?: "[]"
         val list = try { JSONArray(existingJson) } catch (e: Exception) { JSONArray() }
 
-        var duplicate = false
         for (i in 0 until list.length()) {
-            if (list.optJSONObject(i)?.optString("id") == parsed.optString("id")) {
-                duplicate = true; break
+            if (list.optJSONObject(i)?.optString("id") == hashId) {
+                return
             }
         }
-        if (duplicate) return
 
         val newList = JSONArray()
         newList.put(parsed)
@@ -189,7 +173,7 @@ class SmsReceiver : BroadcastReceiver() {
         val label = if (isExpense) "Expense" else "Income"
         showNotification(context,
             title = "New Auto-Detected $label",
-            body = "Rs.${"%.2f".format(amount)} at $vendor"
+            body = "₹${"%.2f".format(amount)} at $vendor"
         )
         notifyFlutterApp(context)
     }
@@ -201,7 +185,7 @@ class SmsReceiver : BroadcastReceiver() {
         context.sendBroadcast(broadcastIntent)
     }
 
-    private fun parseSms(body: String): JSONObject? {
+    private fun parseSms(body: String, sender: String = ""): JSONObject? {
         val lower = body.lowercase(Locale.getDefault())
         if (SPAM_KEYWORDS.any { lower.contains(it) }) return null
         if (SELF_TRANSFER_KEYWORDS.any { lower.contains(it) }) return null
@@ -213,19 +197,25 @@ class SmsReceiver : BroadcastReceiver() {
         val amount = extractAmount(body) ?: return null
         if (amount <= 0) return null
 
-        val vendor = extractVendor(body)
+        val vendor = extractVendor(body, sender)
         val refNo = extractRef(body)
+        val bankAccount = extractBankAccount(body, sender)
         val dateRaw = extractDateRaw(body)
         val date = extractDate(body)
 
         val cleanRef = refNo?.lowercase()?.replace(Regex("[^a-z0-9]"), "") ?: ""
-        val cleanDate = dateRaw.replace(Regex("[^a-z0-9]"), "")
+        val cleanDate = dateRaw.replace(Regex("[^a-z0-9_]"), "")
         val cleanVendor = vendor.lowercase().replace(Regex("[^a-z0-9]"), "")
-        val hashId = if (cleanRef.isNotEmpty() || cleanDate.isNotEmpty()) {
-            "hash_${cleanRef}_${cleanDate}_$cleanVendor"
-        } else {
-            val snippet = lower.replace(Regex("\\d+"), "").replace(Regex("[^a-z]"), "")
-            "hash_${cleanVendor}_${snippet.take(30)}"
+        val amountInt = (amount * 100).toInt()
+        val typeSuffix = if (isExpense) "dr" else "cr"
+
+        val hashId = when {
+            cleanRef.isNotEmpty() -> "hash_ref_${cleanRef}_${amountInt}_$typeSuffix"
+            cleanDate.isNotEmpty() -> "hash_${cleanDate}_${amountInt}_${cleanVendor}_$typeSuffix"
+            else -> {
+                val snippet = lower.replace(Regex("\\d+"), "").replace(Regex("[^a-z]"), "")
+                "hash_${cleanVendor}_${snippet.take(20)}_${amountInt}_$typeSuffix"
+            }
         }
 
         return JSONObject().apply {
@@ -237,28 +227,86 @@ class SmsReceiver : BroadcastReceiver() {
             put("isExpense", isExpense)
             put("rawSmsBody", body)
             put("status", "pending")
+            if (!refNo.isNullOrEmpty()) put("refNumber", refNo)
+            if (!bankAccount.isNullOrEmpty()) put("bankAccount", bankAccount)
         }
     }
 
     private fun extractAmount(body: String): Double? {
-        val m = AMOUNT_PATTERN.matcher(body)
-        return if (m.find()) m.group(1)?.replace(",", "")?.toDoubleOrNull() else null
+        val cleanBody = BALANCE_STRIP_PATTERN.matcher(body).replaceAll(" ")
+
+        val m1 = AMOUNT_ACTION_PATTERN.matcher(cleanBody)
+        if (m1.find()) {
+            val v = m1.group(1)?.replace(",", "")?.toDoubleOrNull()
+            if (v != null && v > 0) return v
+        }
+
+        val m2 = AMOUNT_CURRENCY_PATTERN.matcher(cleanBody)
+        if (m2.find()) {
+            val v = m2.group(1)?.replace(",", "")?.toDoubleOrNull()
+            if (v != null && v > 0) return v
+        }
+
+        val m3 = AMOUNT_TRAILING_PATTERN.matcher(cleanBody)
+        if (m3.find()) {
+            val v = m3.group(1)?.replace(",", "")?.toDoubleOrNull()
+            if (v != null && v > 0) return v
+        }
+
+        val mFallback = AMOUNT_CURRENCY_PATTERN.matcher(body)
+        if (mFallback.find()) {
+            return mFallback.group(1)?.replace(",", "")?.toDoubleOrNull()
+        }
+
+        return null
     }
 
     private fun extractRef(body: String): String? {
         val m = REF_PATTERN.matcher(body)
-        return if (m.find()) m.group(1)?.trim() else null
+        if (m.find()) {
+            val v = m.group(1)?.trim()
+            if (v != null && !v.matches(Regex("^(?:amount|number|balance|account|trans)$", RegexOption.IGNORE_CASE))) {
+                return v
+            }
+        }
+        return null
     }
 
     private fun extractDateRaw(body: String): String {
-        val m = DATE_PATTERN.matcher(body)
-        return if (m.find()) m.group(1)?.trim()?.replace(Regex("[^a-zA-Z0-9]"), "") ?: "" else ""
+        val tm = DATE_TEXT_PATTERN.matcher(body)
+        if (tm.find()) {
+            val timeSuffix = if (tm.group(4) != null) "_${tm.group(4)?.replace(":", "")?.replace(" ", "")}" else ""
+            return "${tm.group(1)}${tm.group(2)}${tm.group(3)}$timeSuffix"
+        }
+        val nm = DATE_NUMERIC_PATTERN.matcher(body)
+        return if (nm.find()) nm.group(1)?.trim()?.replace(Regex("[^a-zA-Z0-9]"), "") ?: "" else ""
     }
 
     private fun extractDate(body: String): String {
-        val m = DATE_PATTERN.matcher(body)
-        if (m.find()) {
-            val str = m.group(1)?.trim() ?: return currentIso()
+        val tm = DATE_TEXT_PATTERN.matcher(body)
+        if (tm.find()) {
+            val day = tm.group(1)?.padStart(2, '0') ?: "01"
+            val monthStr = tm.group(2)?.lowercase(Locale.US) ?: "jan"
+            val month = monthNameToNumber(monthStr)
+            var year = tm.group(3)?.toIntOrNull() ?: 2026
+            if (year < 100) year += 2000
+            val timeGroup = tm.group(4)
+            val timeStr = if (timeGroup != null) {
+                val cleanTime = timeGroup.lowercase(Locale.US).replace("am", "").replace("pm", "").trim()
+                val tParts = cleanTime.split(":")
+                val h = tParts.getOrNull(0)?.padStart(2, '0') ?: "00"
+                val mi = tParts.getOrNull(1)?.padStart(2, '0') ?: "00"
+                val s = tParts.getOrNull(2)?.padStart(2, '0') ?: "00"
+                "${h}:${mi}:${s}"
+            } else {
+                "00:00:00"
+            }
+            return "${year}-${month}-${day}T${timeStr}.000"
+        }
+
+        val nm = DATE_NUMERIC_PATTERN.matcher(body)
+        if (nm.find()) {
+            val str = nm.group(1)?.trim() ?: return currentIso()
             val parts = str.split(Regex("\\s+"))
             val dateComponents = parts[0].split(Regex("[/\\-]"))
             if (dateComponents.size == 3) {
@@ -266,7 +314,7 @@ class SmsReceiver : BroadcastReceiver() {
                 val month = dateComponents[1].padStart(2, '0')
                 var year = dateComponents[2].toIntOrNull() ?: return currentIso()
                 if (year < 100) year += 2000
-                val timeParts = (if (parts.size > 1) parts[1] else "00:00:00").split(":")
+                val timeParts = (if (parts.size > 1) parts[1].lowercase(Locale.US).replace("am", "").replace("pm", "").trim() else "00:00:00").split(":")
                 val h = timeParts.getOrNull(0)?.padStart(2, '0') ?: "00"
                 val mi = timeParts.getOrNull(1)?.padStart(2, '0') ?: "00"
                 val s = timeParts.getOrNull(2)?.padStart(2, '0') ?: "00"
@@ -276,20 +324,127 @@ class SmsReceiver : BroadcastReceiver() {
         return currentIso()
     }
 
-    private fun currentIso(): String =
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.getDefault()).format(Date())
+    private fun monthNameToNumber(name: String): String {
+        return when (name.lowercase(Locale.US)) {
+            "jan" -> "01"; "feb" -> "02"; "mar" -> "03"; "apr" -> "04"
+            "may" -> "05"; "jun" -> "06"; "jul" -> "07"; "aug" -> "08"
+            "sep" -> "09"; "oct" -> "10"; "nov" -> "11"; "dec" -> "12"
+            else -> "01"
+        }
+    }
 
-    private fun extractVendor(body: String): String {
+    private fun currentIso(): String =
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.US).format(Date())
+
+    private fun extractVendor(body: String, sender: String): String {
         val m1 = VENDOR_TO_PATTERN.matcher(body)
-        if (m1.find()) { val v = m1.group(1)?.trim() ?: ""; if (v.length > 1) return capitalize(v.take(30)) }
+        if (m1.find()) {
+            val v = cleanVendor(m1.group(1) ?: "")
+            if (v.isNotEmpty() && !isNoiseWord(v)) return capitalize(v)
+        }
+
         val m2 = VENDOR_AT_PATTERN.matcher(body)
-        if (m2.find()) { val v = m2.group(1)?.trim() ?: ""; if (v.length > 1) return capitalize(v.take(30)) }
+        if (m2.find()) {
+            val v = cleanVendor(m2.group(1) ?: "")
+            if (v.isNotEmpty() && !isNoiseWord(v)) return capitalize(v)
+        }
+
+        val m3 = VPA_PATTERN.matcher(body)
+        if (m3.find()) {
+            val handle = m3.group(1)?.replace(Regex("[._-]"), " ")?.trim() ?: ""
+            val v = cleanVendor(handle)
+            if (v.isNotEmpty() && !isNoiseWord(v)) return capitalize(v)
+        }
+
+        if (sender.isNotEmpty()) {
+            val bank = detectBankFromSender(sender)
+            if (bank != null) return bank
+        }
+
         return "Bank Transfer (UPI)"
+    }
+
+    private fun detectBankFromSender(sender: String): String? {
+        val s = sender.uppercase(Locale.getDefault())
+        return when {
+            s.contains("HDFCBK") -> "HDFC Bank"
+            s.contains("SBIINB") || s.contains("SBIPSG") -> "State Bank of India"
+            s.contains("ICICIB") -> "ICICI Bank"
+            s.contains("AXISBK") -> "Axis Bank"
+            s.contains("KOTAKB") -> "Kotak Bank"
+            s.contains("PNBSMS") -> "PNB Bank"
+            s.contains("BOBSMS") -> "Bank of Baroda"
+            s.contains("CANBNK") -> "Canara Bank"
+            s.contains("UNIONB") -> "Union Bank"
+            s.contains("INDUSB") -> "IndusInd Bank"
+            s.contains("YESBNK") -> "Yes Bank"
+            s.contains("PAYTMB") -> "Paytm Bank"
+            s.contains("FEDBNK") -> "Federal Bank"
+            s.contains("IDFCFB") -> "IDFC First Bank"
+            else -> null
+        }
+    }
+
+    private fun extractBankAccount(body: String, sender: String): String? {
+        var bankName = ""
+        if (sender.isNotEmpty()) {
+            bankName = detectBankFromSender(sender) ?: ""
+        }
+        if (bankName.isEmpty()) {
+            val s = body.uppercase(Locale.getDefault())
+            bankName = when {
+                s.contains("PUNJAB&SIND") || s.contains("PUNJAB & SIND") || s.contains("PSB") -> "Punjab & Sind Bank"
+                s.contains("PNB") || s.contains("PUNJAB NATIONAL") || s.contains("PUNB") -> "PNB Bank"
+                s.contains("HDFC") -> "HDFC Bank"
+                s.contains("SBI") || s.contains("STATE BANK") -> "State Bank of India"
+                s.contains("ICICI") -> "ICICI Bank"
+                s.contains("AXIS") -> "Axis Bank"
+                s.contains("KOTAK") -> "Kotak Bank"
+                s.contains("CANARA") || s.contains("CANRA") -> "Canara Bank"
+                s.contains("BOB") || s.contains("BARODA") -> "Bank of Baroda"
+                s.contains("UNION BANK") -> "Union Bank"
+                s.contains("PAYTM") -> "Paytm Bank"
+                s.contains("IDFC") -> "IDFC First Bank"
+                else -> ""
+            }
+        }
+
+        val accPattern = Pattern.compile("""(?:a\/c|acct|account|card)[\s\.\:\#\-]*(?:no\.?)?\s*([xX\*]*\d{3,6})""", Pattern.CASE_INSENSITIVE)
+        val m = accPattern.matcher(body)
+        var accDigits = ""
+        if (m.find()) {
+            val raw = m.group(1)?.trim() ?: ""
+            val onlyDigits = raw.replace(Regex("[^0-9]"), "")
+            if (onlyDigits.isNotEmpty()) {
+                accDigits = "••$onlyDigits"
+            }
+        }
+
+        return when {
+            bankName.isNotEmpty() && accDigits.isNotEmpty() -> "$bankName (A/c $accDigits)"
+            bankName.isNotEmpty() -> bankName
+            accDigits.isNotEmpty() -> "A/c $accDigits"
+            else -> null
+        }
+    }
+
+    private fun cleanVendor(raw: String): String {
+        var c = raw.trim()
+        c = c.replace(Regex("""^(?:vpa|ref|txn|id|\:|\-)\s*""", RegexOption.IGNORE_CASE), "")
+        c = c.replace(Regex("""\s+(?:thru|through|via|upi|vpa|ref|bal|a/c).*$""", RegexOption.IGNORE_CASE), "")
+        if (c.length > 30) c = c.substring(0, 30)
+        return c.trim()
+    }
+
+    private fun isNoiseWord(w: String): Boolean {
+        val l = w.lowercase(Locale.getDefault())
+        return l == "your" || l == "bank" || l == "account" || l == "upi" || l == "vpa" ||
+                l == "a/c" || l == "rs" || l == "inr" || l.length < 2
     }
 
     private fun capitalize(text: String): String =
         text.trim().split(" ").joinToString(" ") {
-            if (it.isEmpty()) "" else it[0].uppercaseChar() + it.substring(1).lowercase()
+            if (it.isEmpty()) "" else it[0].uppercaseChar() + it.substring(1).lowercase(Locale.getDefault())
         }
 
     private fun showNotification(context: Context, title: String, body: String) {

@@ -227,10 +227,10 @@ class _FinancialInsightsPageState extends ConsumerState<FinancialInsightsPage>
     final now = DateTime.now();
 
     final totalExpense = transactions
-        .where((t) => t.isExpense)
+        .where((t) => t.isExpense && t.categoryId != 'self_transfer')
         .fold(0.0, (s, t) => s + t.amount);
     final totalIncome = transactions
-        .where((t) => !t.isExpense)
+        .where((t) => !t.isExpense && t.categoryId != 'self_transfer')
         .fold(0.0, (s, t) => s + t.amount);
 
     return ListView(
@@ -1205,17 +1205,23 @@ class _TransactionTileState extends State<_TransactionTile>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                 decoration: BoxDecoration(
-                  color: t.isExpense
-                      ? _kRed.withOpacity(0.08)
-                      : _kGreen.withOpacity(0.08),
+                  color: (t.categoryId == 'self_transfer')
+                      ? const Color(0xFF607D8B).withOpacity(0.12)
+                      : (t.isExpense
+                          ? _kRed.withOpacity(0.08)
+                          : _kGreen.withOpacity(0.08)),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  '${t.isExpense ? '-' : '+'}₹${t.amount.toStringAsFixed(0)}',
+                  (t.categoryId == 'self_transfer')
+                      ? '₹${t.amount.toStringAsFixed(0)}'
+                      : '${t.isExpense ? '-' : '+'}₹${t.amount.toStringAsFixed(0)}',
                   style: GoogleFonts.manrope(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
-                    color: t.isExpense ? _kRed : _kGreen,
+                    color: (t.categoryId == 'self_transfer')
+                        ? const Color(0xFF607D8B)
+                        : (t.isExpense ? _kRed : _kGreen),
                   ),
                 ),
               ),

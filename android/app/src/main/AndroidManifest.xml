@@ -6,10 +6,11 @@
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.RECEIVE_SMS"/>
     <uses-permission android:name="android.permission.READ_SMS"/>
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" tools:node="remove"/>
 
     <application
-        android:label="know_your_expenses"
+        android:label="Know Your Expenses"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -60,13 +61,25 @@
             </intent-filter>
         </receiver>
 
-        <!-- Native SMS Receiver — handles killed-app SMS without Flutter engine -->
+        <!-- Native SMS Receiver — handles killed-app SMS with WakeLock & goAsync -->
         <receiver
             android:name=".SmsReceiver"
             android:exported="true"
             android:enabled="true">
             <intent-filter android:priority="999">
                 <action android:name="android.provider.Telephony.SMS_RECEIVED"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- Native Boot Receiver — guarantees background readiness after device reboot -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
     </application>

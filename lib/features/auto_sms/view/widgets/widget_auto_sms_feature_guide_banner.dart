@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:know_your_expenses/features/auto_sms/view_model/auto_sms_provider.dart';
 import 'package:know_your_expenses/features/auto_sms/view/page_sms_settings.dart';
+import 'package:know_your_expenses/features/auto_sms/view/widgets/widget_auto_sms_onboarding_sheet.dart';
 
 final autoSmsGuideDismissedProvider = StateProvider<bool>((ref) => false);
 
@@ -93,11 +95,16 @@ class _WidgetAutoSmsFeatureGuideBannerState extends ConsumerState<WidgetAutoSmsF
                   ),
                   const SizedBox(height: 8),
                   GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const PageSmsSettings()),
-                      );
+                    onTap: () async {
+                      final isBlocked = await Permission.sms.isPermanentlyDenied;
+                      if (isBlocked && context.mounted) {
+                        await AutoSmsPermissionHelper.showPermissionBlockedDialog(context);
+                      } else if (context.mounted) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const PageSmsSettings()),
+                        );
+                      }
                     },
                     child: Text(
                       'Enable Feature →',

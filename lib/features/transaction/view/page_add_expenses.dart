@@ -390,7 +390,7 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
-                                          'Expense',
+                                          'You Paid',
                                           style: GoogleFonts.manrope(
                                             fontWeight: FontWeight.bold,
                                             color: isExpense ? Colors.red[800] : Colors.grey[700],
@@ -430,7 +430,7 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
-                                          'Income',
+                                          'You Received',
                                           style: GoogleFonts.manrope(
                                             fontWeight: FontWeight.bold,
                                             color: !isExpense ? Colors.green[800] : Colors.grey[700],
@@ -1444,7 +1444,7 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                                           borderRadius: BorderRadius.circular(30),
                                         ),
                                         child: Text(
-                                          isExpense ? 'EXPENSE' : 'INCOME',
+                                          isExpense ? 'YOU PAID' : 'YOU RECEIVED',
                                           style: GoogleFonts.manrope(
                                             fontSize: 11,
                                             fontWeight: FontWeight.w800,
@@ -1651,7 +1651,7 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
       valueListenable: selectedCategoryNotifier,
       builder: (context, currentCategory, _) {
         return SizedBox(
-          height: 100,
+          height: 104,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: categories.length,
@@ -1662,7 +1662,8 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                 onTap: () => selectedCategoryNotifier.value = category,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
-                  width: 90,
+                  constraints: const BoxConstraints(minWidth: 84),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   margin: const EdgeInsets.only(right: 12),
                   decoration: BoxDecoration(
                     color: isSelected ? category.color : Colors.white,
@@ -1685,17 +1686,19 @@ class _AddExpensePageState extends ConsumerState<AddExpensePage> {
                         color: isSelected ? Colors.white : category.color,
                         size: 28,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
                         child: Text(
                           category.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          maxLines: 2,
+                          softWrap: true,
+                          textAlign: TextAlign.center,
                           style: GoogleFonts.manrope(
-                            fontSize: 12,
+                            fontSize: 11.5,
                             fontWeight: FontWeight.w600,
                             color: isSelected ? Colors.white : Colors.black87,
+                            height: 1.15,
                           ),
                         ),
                       ),

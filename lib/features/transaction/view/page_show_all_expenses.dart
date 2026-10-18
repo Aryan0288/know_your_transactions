@@ -18,9 +18,11 @@ import 'package:know_your_expenses/features/transaction/view/page_split_ledger.d
 import 'package:know_your_expenses/features/transaction/view/dialog_transaction_detail.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_group.dart';
 import 'package:know_your_expenses/features/common_widgets/closable_banner_ad.dart';
+import 'package:know_your_expenses/features/common_widgets/inline_feed_banner_ad.dart';
 import 'package:know_your_expenses/features/transaction/view/widgets/widget_home_filter_bottom_sheet.dart';
 import 'package:know_your_expenses/features/auto_sms/view/widgets/widget_pending_ledger_banner.dart';
 import 'package:know_your_expenses/features/auto_sms/view/widgets/widget_auto_sms_feature_guide_banner.dart';
+import 'package:know_your_expenses/features/auto_sms/view_model/auto_sms_provider.dart';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 const _kGreen = Color(0xFF429690);
@@ -35,7 +37,7 @@ class ShowAllExpensesPage extends ConsumerStatefulWidget {
 }
 
 class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _headerController;
   late AnimationController _contentController;
 
@@ -48,6 +50,7 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     _headerController = AnimationController(
       duration: const Duration(milliseconds: 900),
@@ -96,10 +99,24 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
     _headerController.forward().then((_) {
       _contentController.forward();
     });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(pendingSmsListProvider.notifier).reloadFromPrefs();
+      ref.read(pendingSmsListProvider.notifier).performStartupSilentSync();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.read(pendingSmsListProvider.notifier).reloadFromPrefs();
+      ref.read(pendingSmsListProvider.notifier).performStartupSilentSync();
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _headerController.dispose();
     _contentController.dispose();
     super.dispose();
@@ -138,9 +155,9 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                 physics: const BouncingScrollPhysics(),
                 slivers: [
                   // Shake Onboarding Hint
-                  const SliverToBoxAdapter(
-                    child: _ShakeOnboardingCard(),
-                  ),
+                  // const SliverToBoxAdapter(
+                  //   child: _ShakeOnboardingCard(),
+                  // ),
                   // Section header
                   SliverToBoxAdapter(
                     child: Padding(
@@ -394,8 +411,8 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                             child: Row(
                               children: [
                                 buildChip('All', 'all', Icons.receipt_long_rounded, _kGreen),
-                                buildChip('Expenses', 'expense', Icons.arrow_upward_rounded, Colors.redAccent),
-                                buildChip('Income', 'income', Icons.arrow_downward_rounded, Colors.green),
+                                buildChip('You Paid', 'expense', Icons.arrow_upward_rounded, Colors.redAccent),
+                                buildChip('You Received', 'income', Icons.arrow_downward_rounded, Colors.green),
                               ],
                             ),
                           );
@@ -462,7 +479,7 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                             );
                           }
 
-                          // Group transactions by date
+                          // Group transactions by date and insert ad every 6th transaction
                           final List<_HistoryItem> items = [];
                           String? lastDateStr;
 
@@ -474,6 +491,11 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                               lastDateStr = dateStr;
                             }
                             items.add(_TransactionTileItem(tx, i));
+
+                            // Insert in-feed banner ad after every 6th transaction
+                            if ((i + 1) % 6 == 0 && i < displayTransactions.length - 1) {
+                              items.add(_AdBannerItem(i));
+                            }
                           }
 
                           return SliverList(
@@ -513,6 +535,10 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
                                   transaction: item.transaction,
                                   index: item.index,
                                   key: ValueKey(item.transaction.id),
+                                );
+                              } else if (item is _AdBannerItem) {
+                                return InlineFeedBannerAd(
+                                  key: ValueKey('in_feed_ad_${item.index}'),
                                 );
                               }
                               return const SizedBox.shrink();
@@ -869,7 +895,7 @@ class _BalanceCard extends StatelessWidget {
             children: [
               Expanded(
                 child: _IncomeExpenseCard(
-                  title: 'Income',
+                  title: 'You Received',
                   amount: stats.totalIncome,
                   icon: Icons.arrow_downward_rounded,
                   iconBg: const Color(0xFF2E7D32),
@@ -1009,9 +1035,12 @@ class _TransactionTile extends ConsumerWidget {
     final isRecipient = transaction.splitWith != null && transaction.splitWith!.contains(currentUserId);
     final isExpense = isWagesGroup && isRecipient ? false : transaction.isExpense;
 
-    final amountColor = isExpense
-        ? const Color(0xFFE57373)
-        : const Color(0xFF66BB6A);
+    final isSelfTransfer = transaction.categoryId == 'self_transfer';
+    final amountColor = isSelfTransfer
+        ? const Color(0xFF607D8B)
+        : (isExpense
+            ? const Color(0xFFE57373)
+            : const Color(0xFF66BB6A));
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
@@ -1053,15 +1082,19 @@ class _TransactionTile extends ConsumerWidget {
                 ),
                 const SizedBox(width: 14),
 
-                // Title + date
+                // Title + date + bank
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        transaction.categoryName,
+                        transaction.description.isNotEmpty
+                            ? transaction.description
+                            : transaction.categoryName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.manrope(
-                          fontSize: 15,
+                          fontSize: 14.5,
                           fontWeight: FontWeight.w700,
                           color: const Color(0xFF1E2D2C),
                         ),
@@ -1078,23 +1111,42 @@ class _TransactionTile extends ConsumerWidget {
                           Text(
                             _formatDate(transaction.date),
                             style: GoogleFonts.manrope(
-                              fontSize: 12,
+                              fontSize: 11.5,
                               color: Colors.grey.shade500,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
+                          if (transaction.bankAccount != null && transaction.bankAccount!.isNotEmpty) ...[
+                            Text(
+                              '  •  ',
+                              style: TextStyle(fontSize: 10, color: Colors.grey.shade400),
+                            ),
+                            Flexible(
+                              child: Text(
+                                transaction.bankAccount!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.manrope(
+                                  fontSize: 11,
+                                  color: const Color(0xFF429690),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
 
-                // Amount + desc
+                // Amount + category pill
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '${isExpense ? '-' : '+'} ₹${transaction.amount.toStringAsFixed(2)}',
+                      '${isSelfTransfer ? '' : (isExpense ? '-' : '+')} ₹${transaction.amount.toStringAsFixed(2)}',
                       style: GoogleFonts.manrope(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
@@ -1109,15 +1161,15 @@ class _TransactionTile extends ConsumerWidget {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
+                          color: transaction.color.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          _limitChars(transaction.description, 18),
+                          transaction.categoryName,
                           style: GoogleFonts.manrope(
                             fontSize: 10,
-                            color: Colors.grey.shade500,
-                            fontWeight: FontWeight.w500,
+                            color: transaction.color,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -1464,6 +1516,11 @@ class _TransactionTileItem extends _HistoryItem {
   final TransactionModel transaction;
   final int index;
   _TransactionTileItem(this.transaction, this.index);
+}
+
+class _AdBannerItem extends _HistoryItem {
+  final int index;
+  _AdBannerItem(this.index);
 }
 
 String _formatHeaderDate(DateTime date) {

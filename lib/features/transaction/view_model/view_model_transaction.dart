@@ -11,6 +11,9 @@ import 'package:know_your_expenses/features/helper/notification_helper.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_home.dart';
 import 'package:know_your_expenses/features/transaction/model/model_transaction.dart';
 import 'package:know_your_expenses/features/home/view_model/view_model_group.dart';
+import 'package:know_your_expenses/features/auto_sms/service/auto_sms_service.dart';
+import 'package:know_your_expenses/features/auto_sms/service/sms_parser_service.dart';
+import 'package:know_your_expenses/features/auto_sms/view_model/auto_sms_provider.dart';
 
 
 
@@ -19,12 +22,12 @@ final transactionViewModelProvider =
       return TransactionViewModel(ref);
     });
 
-enum StatisticsPeriod { day, week, month, year }
+enum StatisticsPeriod { all, day, week, month, year }
 
 enum StatisticsType { expense, income }
 
 final selectedPeriodProvider = StateProvider<StatisticsPeriod>(
-  (ref) => StatisticsPeriod.week,
+  (ref) => StatisticsPeriod.all,
 );
 final statisticsTypeProvider = StateProvider<StatisticsType>(
   (ref) => StatisticsType.expense,
@@ -74,60 +77,146 @@ final groupCategoriesStreamProvider = StreamProvider<List<CategoryModel>>((ref) 
       });
 });
 
+final kDefaultCategories = [
+  CategoryModel(
+    id: 'investments',
+    name: 'Investment',
+    iconCodePoint: Icons.trending_up_rounded.codePoint,
+    colorValue: const Color(0xFF00897B).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'food',
+    name: 'Food',
+    iconCodePoint: Icons.restaurant_rounded.codePoint,
+    colorValue: const Color(0xFFFB8C00).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'groceries',
+    name: 'Groceries',
+    iconCodePoint: Icons.shopping_cart_rounded.codePoint,
+    colorValue: const Color(0xFF43A047).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'shopping',
+    name: 'Shopping',
+    iconCodePoint: Icons.shopping_bag_rounded.codePoint,
+    colorValue: const Color(0xFFE91E63).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'transport',
+    name: 'Transport',
+    iconCodePoint: Icons.directions_car_rounded.codePoint,
+    colorValue: const Color(0xFF1E88E5).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'utilities',
+    name: 'Bills & Utilities',
+    iconCodePoint: Icons.receipt_long_rounded.codePoint,
+    colorValue: const Color(0xFFFFA000).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'bills_emi',
+    name: 'Cards & EMI',
+    iconCodePoint: Icons.credit_card_rounded.codePoint,
+    colorValue: const Color(0xFF3949AB).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'rent',
+    name: 'Rent',
+    iconCodePoint: Icons.home_work_rounded.codePoint,
+    colorValue: const Color(0xFF8D6E63).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'health',
+    name: 'Health',
+    iconCodePoint: Icons.medical_services_rounded.codePoint,
+    colorValue: const Color(0xFFE53935).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'entertainment',
+    name: 'Entertainment',
+    iconCodePoint: Icons.movie_filter_rounded.codePoint,
+    colorValue: const Color(0xFF8E24AA).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'fuel',
+    name: 'Fuel',
+    iconCodePoint: Icons.local_gas_station_rounded.codePoint,
+    colorValue: const Color(0xFFD32F2F).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'education',
+    name: 'Education',
+    iconCodePoint: Icons.school_rounded.codePoint,
+    colorValue: const Color(0xFF5E35B1).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'personal_care',
+    name: 'Personal Care',
+    iconCodePoint: Icons.face_retouching_natural_rounded.codePoint,
+    colorValue: const Color(0xFF00ACC1).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'donations',
+    name: 'Donations',
+    iconCodePoint: Icons.volunteer_activism_rounded.codePoint,
+    colorValue: const Color(0xFFD81B60).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'transfer',
+    name: 'Transfers',
+    iconCodePoint: Icons.swap_horiz_rounded.codePoint,
+    colorValue: const Color(0xFF546E7A).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'self_transfer',
+    name: 'Self Transfer',
+    iconCodePoint: Icons.sync_alt_rounded.codePoint,
+    colorValue: const Color(0xFF607D8B).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'income',
+    name: 'Received',
+    iconCodePoint: Icons.payments_rounded.codePoint,
+    colorValue: const Color(0xFF2E7D32).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'refund',
+    name: 'Refunds & Cashback',
+    iconCodePoint: Icons.redeem_rounded.codePoint,
+    colorValue: const Color(0xFF00897B).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'returns',
+    name: 'Returns & Div',
+    iconCodePoint: Icons.savings_rounded.codePoint,
+    colorValue: const Color(0xFF00838F).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'online',
+    name: 'Online',
+    iconCodePoint: Icons.account_balance_wallet_rounded.codePoint,
+    colorValue: const Color(0xFF429690).toARGB32(),
+  ),
+  CategoryModel(
+    id: 'other',
+    name: 'Other',
+    iconCodePoint: Icons.category_rounded.codePoint,
+    colorValue: const Color(0xFF757575).toARGB32(),
+  ),
+];
+
 final categoriesProvider = StreamProvider<List<CategoryModel>>((ref) {
   final personalCategories = ref.watch(personalCategoriesStreamProvider).value ?? [];
   final groupCategories = ref.watch(groupCategoriesStreamProvider).value ?? [];
 
-  final defaultCategories = [
-    CategoryModel(
-      id: 'food',
-      name: 'Food',
-      iconCodePoint: Icons.restaurant.codePoint,
-      colorValue: Colors.orange.value,
-    ),
-    CategoryModel(
-      id: 'transport',
-      name: 'Transport',
-      iconCodePoint: Icons.directions_bus.codePoint,
-      colorValue: Colors.blue.value,
-    ),
-    CategoryModel(
-      id: 'shopping',
-      name: 'Shopping',
-      iconCodePoint: Icons.shopping_bag.codePoint,
-      colorValue: Colors.pink.value,
-    ),
-    CategoryModel(
-      id: 'utilities',
-      name: 'Utilities',
-      iconCodePoint: Icons.power.codePoint,
-      colorValue: Colors.amber.value,
-    ),
-    CategoryModel(
-      id: 'entertainment',
-      name: 'Entertainment',
-      iconCodePoint: Icons.movie.codePoint,
-      colorValue: Colors.purple.value,
-    ),
-    CategoryModel(
-      id: 'health',
-      name: 'Health',
-      iconCodePoint: Icons.medical_services.codePoint,
-      colorValue: Colors.red.value,
-    ),
-    CategoryModel(
-      id: 'online',
-      name: 'Online',
-      iconCodePoint: Icons.account_balance_wallet.codePoint,
-      colorValue: const Color(0xFF429690).value,
-    ),
-  ];
+  final defaultCategories = kDefaultCategories;
 
   final otherCategory = CategoryModel(
     id: 'other',
     name: 'Other',
     iconCodePoint: Icons.more_horiz.codePoint,
-    colorValue: Colors.grey.value,
+    colorValue: Colors.grey.toARGB32(),
   );
 
   // Merge lists, avoiding duplicates by name
@@ -159,6 +248,222 @@ final categoriesProvider = StreamProvider<List<CategoryModel>>((ref) {
   return Stream.value(allCategories);
 });
 
+bool _isAutoHealingRunning = false;
+bool _hasPendingHeal = false;
+List<TransactionModel>? _pendingHealTransactions;
+String? _pendingHealUserId;
+List<CategoryModel>? _pendingHealCategories;
+
+void _queueAutoHeal(List<TransactionModel> transactions, String userId, List<CategoryModel> categories) {
+  if (transactions.isEmpty || userId.isEmpty) return;
+  if (_isAutoHealingRunning) {
+    _hasPendingHeal = true;
+    _pendingHealTransactions = transactions;
+    _pendingHealUserId = userId;
+    _pendingHealCategories = categories;
+    return;
+  }
+  _runAutoHeal(transactions, userId, categories);
+}
+
+void _runAutoHeal(List<TransactionModel> transactions, String userId, List<CategoryModel> categories) async {
+  _isAutoHealingRunning = true;
+  _hasPendingHeal = false;
+
+  try {
+    final Map<String, List<TransactionModel>> refMap = {};
+    for (final tx in transactions) {
+      // 0. Auto-Healer Purge: Remove falsely captured marketing/promotional SMS transactions or pre-debit notices
+      if (tx.rawSmsBody != null && tx.rawSmsBody!.isNotEmpty) {
+        final bodyLower = tx.rawSmsBody!.toLowerCase();
+        final bool isMarketingSpam = bodyLower.contains('start sip') ||
+            bodyLower.contains('start sips') ||
+            bodyLower.contains('start investing') ||
+            bodyLower.contains('invest from') ||
+            bodyLower.contains('build wealth') ||
+            bodyLower.contains('grow wealth') ||
+            bodyLower.contains('credited instantly') ||
+            bodyLower.contains('ready to be credited') ||
+            bodyLower.contains('can be credited') ||
+            bodyLower.contains('get instant funds credited') ||
+            bodyLower.contains('if debited') ||
+            bodyLower.contains('use code: claim') ||
+            bodyLower.contains('open demat') ||
+            bodyLower.contains('open trading account');
+
+        final bool isPreDebitNotice = (bodyLower.contains('is due on') ||
+                bodyLower.contains('due on') ||
+                bodyLower.contains('ensure availability of fund')) &&
+            (bodyLower.contains('mandate debit') || bodyLower.contains('nach mandate'));
+
+        if (isMarketingSpam || isPreDebitNotice) {
+          debugPrint('[AutoHeal] Purging non-financial/promotional transaction ${tx.id} (${tx.categoryName}, ₹${tx.amount})');
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .collection('transactions')
+              .doc(tx.id)
+              .delete();
+          continue; // Skip processing and omit from refMap
+        }
+      }
+
+      String? r = tx.refNumber;
+      final Map<String, dynamic> updateData = {};
+
+      // 1. Smart Retroactive Healer for Legacy Transactions
+      if (r == null && tx.rawSmsBody != null && tx.rawSmsBody!.isNotEmpty) {
+        final newlyFoundRef = SmsParserService.extractReference(tx.rawSmsBody!);
+        r = newlyFoundRef ?? '';
+        updateData['refNumber'] = r;
+        debugPrint('[AutoHeal] Migrated legacy tx ${tx.id}. Found ref: $newlyFoundRef');
+      }
+
+      // 2. Smart Retroactive Categorizer for "Transfer" and "Transport" fallbacks
+      if ((tx.categoryId == 'transfer' || tx.categoryId == 'transport') && tx.rawSmsBody != null) {
+        final pendingSms = tx.toPendingSms();
+        final newCategory = PendingSmsNotifier.getSmartCategory(pendingSms, categories);
+        
+        // If the smart categorizer found a better match than the current category
+        if (newCategory.id != tx.categoryId) {
+          updateData['categoryId'] = newCategory.id;
+          updateData['categoryName'] = newCategory.name;
+          updateData['iconCodePoint'] = newCategory.iconCodePoint;
+          updateData['colorValue'] = newCategory.colorValue;
+          debugPrint('[AutoHeal] Upgraded category for ${tx.id} from ${tx.categoryName} to ${newCategory.name}');
+        }
+      }
+
+      // 3. Retroactive Name Updater (e.g. Income -> Received)
+      if (tx.categoryId == 'income' && tx.categoryName != 'Received') {
+        updateData['categoryName'] = 'Received';
+        debugPrint('[AutoHeal] Upgraded categoryName for ${tx.id} from ${tx.categoryName} to Received');
+      }
+
+      // 4. Retroactive APY / PRAN Healer: Migrate mistakenly stored income to Expense (Investment)
+      if (!tx.isExpense && tx.rawSmsBody != null && tx.rawSmsBody!.isNotEmpty) {
+        final bLower = tx.rawSmsBody!.toLowerCase();
+        final bool isApyContribution = (bLower.contains('contribution') ||
+                bLower.contains('contributed') ||
+                bLower.contains('installment')) &&
+            (bLower.contains('pran') ||
+                bLower.contains('apy') ||
+                bLower.contains('nps') ||
+                bLower.contains('atal pension') ||
+                bLower.contains('protean') ||
+                bLower.contains('pfrda'));
+
+        if (isApyContribution) {
+          updateData['isExpense'] = true;
+          final invCat = categories.firstWhere(
+            (c) => c.id == 'investments' || c.name.toLowerCase().contains('investment'),
+            orElse: () => categories.first,
+          );
+          updateData['categoryId'] = invCat.id;
+          updateData['categoryName'] = invCat.name;
+          updateData['iconCodePoint'] = invCat.iconCodePoint;
+          updateData['colorValue'] = invCat.colorValue;
+          debugPrint('[AutoHeal] Healed APY contribution ${tx.id} from Income to Expense (Investment)');
+        }
+      }
+
+      // Execute zero-cost batched update
+      if (updateData.isNotEmpty) {
+        updateData['updatedAt'] = FieldValue.serverTimestamp();
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('transactions')
+            .doc(tx.id)
+            .update(updateData);
+      }
+
+      final cleanRef = r?.toLowerCase().trim();
+      if (cleanRef != null && cleanRef.isNotEmpty) {
+        refMap.putIfAbsent(cleanRef, () => []).add(tx);
+      }
+    }
+
+    for (final entry in refMap.entries) {
+      final list = entry.value;
+      if (list.length >= 2) {
+        final double firstAmount = list.first.amount;
+        final matchingAmountList = list.where((t) => (t.amount - firstAmount).abs() < 0.01).toList();
+
+        if (matchingAmountList.length >= 2) {
+          // Sort by date (oldest first) so we keep the oldest one
+          matchingAmountList.sort((a, b) => a.date.compareTo(b.date));
+          final t1 = matchingAmountList[0];
+          final t2 = matchingAmountList[1];
+
+          if (t1.isExpense == t2.isExpense) {
+            // DUPLICATE (Same Direction) -> Delete the newer one (t2)
+            debugPrint('[AutoHeal] Deleting pure duplicate refNumber ${entry.key}: Keeping ${t1.id}, Deleting ${t2.id}');
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(userId)
+                .collection('transactions')
+                .doc(t2.id)
+                .delete();
+          } else {
+            // SELF TRANSFER (Opposite Direction) -> Merge them
+            final debitTx = t1.isExpense ? t1 : t2;
+            final creditTx = t1.isExpense ? t2 : t1;
+
+            final fromStr = (debitTx.bankAccount != null && debitTx.bankAccount!.isNotEmpty)
+                ? debitTx.bankAccount!
+                : 'Account';
+            final toStr = (creditTx.bankAccount != null && creditTx.bankAccount!.isNotEmpty)
+                ? creditTx.bankAccount!
+                : 'Account';
+            final selfTransferDesc = 'Self Transfer ($fromStr ➔ $toStr)';
+
+            final raw1 = debitTx.rawSmsBody ?? '';
+            final raw2 = creditTx.rawSmsBody ?? '';
+            final mergedRaw = raw1.isNotEmpty && raw2.isNotEmpty && raw1 != raw2
+                ? '$raw1\n---\n$raw2'
+                : (raw1.isNotEmpty ? raw1 : raw2);
+
+            debugPrint('[AutoHeal] Consolidating duplicate refNumber ${entry.key}: Upgrading ${debitTx.id} & deleting ${creditTx.id}');
+
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(userId)
+                .collection('transactions')
+                .doc(debitTx.id)
+                .update({
+              'categoryId': 'self_transfer',
+              'categoryName': 'Self Transfer',
+              'iconCodePoint': Icons.sync_alt_rounded.codePoint,
+              'colorValue': const Color(0xFF607D8B).toARGB32(),
+              'description': selfTransferDesc,
+              'isExpense': true,
+              'bankAccount': debitTx.bankAccount,
+              'merchantName': creditTx.bankAccount ?? 'Self Transfer',
+              'rawSmsBody': mergedRaw,
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(userId)
+                .collection('transactions')
+                .doc(creditTx.id)
+                .delete();
+          }
+        }
+      }
+    }
+  } catch (e) {
+    debugPrint('[AutoHeal] Error during duplicate ref reconciliation: $e');
+  } finally {
+    _isAutoHealingRunning = false;
+    if (_hasPendingHeal && _pendingHealTransactions != null && _pendingHealUserId != null && _pendingHealCategories != null) {
+      Future.microtask(() => _queueAutoHeal(_pendingHealTransactions!, _pendingHealUserId!, _pendingHealCategories!));
+    }
+  }
+}
+
 final personalTransactionsStreamProvider = StreamProvider<List<TransactionModel>>((ref) {
   final user = ref.watch(authStateProvider).value;
   if (user == null) return Stream.value([]);
@@ -170,9 +475,12 @@ final personalTransactionsStreamProvider = StreamProvider<List<TransactionModel>
       .orderBy('date', descending: true)
       .snapshots()
       .map((snapshot) {
-        return snapshot.docs
+        final list = snapshot.docs
             .map((doc) => TransactionModel.fromMap(doc.data(), doc.id))
             .toList();
+        final categories = ref.read(categoriesProvider).value ?? kDefaultCategories;
+        _queueAutoHeal(list, user.uid, categories);
+        return list;
       });
 });
 
@@ -256,6 +564,7 @@ final transactionStatsProvider = Provider<TransactionStats>((ref) {
   double totalExpense = 0;
 
   for (var t in transactions) {
+    if (t.categoryId == 'self_transfer') continue;
     double amount = t.amount;
 
     // Wages received by employee = income, not expense
@@ -332,6 +641,7 @@ final homeFilteredTransactionStatsProvider = Provider<TransactionStats>((ref) {
   double totalExpense = 0;
 
   for (var t in transactions) {
+    if (t.categoryId == 'self_transfer') continue;
     double amount = t.amount;
 
     // Wages received by employee = income, not expense
@@ -378,7 +688,10 @@ final filteredTransactionsProvider = Provider<List<TransactionModel>>((ref) {
   }
 
   return groupFiltered.where((t) {
-    if (period == StatisticsPeriod.day) {
+    if (period == StatisticsPeriod.all) {
+      // All time
+      return true;
+    } else if (period == StatisticsPeriod.day) {
       // Today (from midnight)
       final todayMidnight = DateTime(now.year, now.month, now.day);
       return t.date.isAfter(todayMidnight);
@@ -399,7 +712,9 @@ final topSpendingProvider = Provider<List<TransactionModel>>((ref) {
   final transactions = ref.watch(filteredTransactionsProvider);
   final type = ref.watch(statisticsTypeProvider);
   final isExpense = type == StatisticsType.expense;
-  final filtered = transactions.where((t) => t.isExpense == isExpense).toList();
+  final filtered = transactions
+      .where((t) => t.isExpense == isExpense && t.categoryId != 'self_transfer')
+      .toList();
 
   filtered.sort((a, b) => b.amount.compareTo(a.amount));
   return filtered;
@@ -447,6 +762,7 @@ final financialInsightsProvider = Provider<FinancialInsight>((ref) {
       .where(
         (t) =>
             t.isExpense &&
+            t.categoryId != 'self_transfer' &&
             (t.date.isAfter(startOfCurrentMonth) ||
                 t.date.isAtSameMomentAs(startOfCurrentMonth)),
       )
@@ -456,6 +772,7 @@ final financialInsightsProvider = Provider<FinancialInsight>((ref) {
       .where(
         (t) =>
             t.isExpense &&
+            t.categoryId != 'self_transfer' &&
             (t.date.isAfter(startOfPrevMonth) ||
                 t.date.isAtSameMomentAs(startOfPrevMonth)) &&
             t.date.isBefore(startOfCurrentMonth),
@@ -472,6 +789,7 @@ final financialInsightsProvider = Provider<FinancialInsight>((ref) {
       .where(
         (t) =>
             !t.isExpense &&
+            t.categoryId != 'self_transfer' &&
             (t.date.isAfter(startOfCurrentMonth) ||
                 t.date.isAtSameMomentAs(startOfCurrentMonth)),
       )
@@ -617,8 +935,32 @@ final userDataProvider = StreamProvider<Map<String, dynamic>?>((ref) {
       .map((doc) => doc.data());
 });
 
+class InFlightRefInfo {
+  final double amount;
+  final bool isExpense;
+  final String? bankAccount;
+  final String? merchantName;
+  final String? smsHash;
+  final String? rawSmsBody;
+  bool isMerged;
+
+  InFlightRefInfo({
+    required this.amount,
+    required this.isExpense,
+    this.bankAccount,
+    this.merchantName,
+    this.smsHash,
+    this.rawSmsBody,
+    this.isMerged = false,
+  });
+}
+
 class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
   final Ref ref;
+  static final Set<String> _inFlightSmsHashes = {};
+  static final Set<String> _inFlightRefNumbers = {};
+  static final Map<String, InFlightRefInfo> _inFlightSelfTransferMap = {};
+
   TransactionViewModel(this.ref) : super(const AsyncValue.data(null));
 
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
@@ -668,13 +1010,239 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
     Map<String, double>? splitAmounts,
     String? overrideUserId,
     String? paymentMode,
+    String? smsHash,
+    String? merchantName,
+    String? bankAccount,
+    String? refNumber,
+    String? rawSmsBody,
+    bool silentNotification = false,
   }) async {
     final user = ref.read(firebaseAuthProvider).currentUser;
     if (user == null) return false;
     final groupId = targetGroupId ?? ref.read(userGroupIdProvider);
 
+    final cleanHash = smsHash?.trim() ?? '';
+    final cleanRef = refNumber?.trim().toLowerCase() ?? '';
+
+    // 1. In-flight memory deduplication guard
+    if (cleanHash.isNotEmpty) {
+      if (_inFlightSmsHashes.contains(cleanHash)) {
+        debugPrint('[TransactionViewModel] addTransaction skipped - smsHash $cleanHash already in-flight.');
+        return true;
+      }
+      _inFlightSmsHashes.add(cleanHash);
+      Future.delayed(const Duration(seconds: 30), () => _inFlightSmsHashes.remove(cleanHash));
+    }
+
+    // Layer 2: In-Flight Concurrency Map (Instant Multi-SMS Race Condition Intercept)
+    if (cleanRef.isNotEmpty && !isShared && groupId == null) {
+      final inFlight = _inFlightSelfTransferMap[cleanRef];
+      if (inFlight != null && (inFlight.amount - amount).abs() < 0.01) {
+        if (inFlight.isMerged) {
+          debugPrint('[TransactionViewModel] Layer 2 In-Flight match skipped - already merged. Duplicate broadcast.');
+          return true;
+        }
+
+        final isOpposite = inFlight.isExpense != isExpense;
+        final isDifferentBank = (inFlight.bankAccount?.toLowerCase().trim() ?? '') != (bankAccount?.toLowerCase().trim() ?? '');
+        
+        if (!isOpposite && !isDifferentBank) {
+          debugPrint('[TransactionViewModel] Layer 2 In-Flight match skipped - same direction and same bank. Duplicate broadcast.');
+          return true;
+        }
+
+        inFlight.isMerged = true;
+        debugPrint('[TransactionViewModel] Layer 2 In-Flight match for ref $cleanRef! Merging directly.');
+
+        String? debitBank;
+        String? creditBank;
+        if (isOpposite) {
+          debitBank = isExpense ? bankAccount : inFlight.bankAccount;
+          creditBank = isExpense ? inFlight.bankAccount : bankAccount;
+        } else {
+          debitBank = inFlight.bankAccount;
+          creditBank = bankAccount;
+        }
+
+        final fromStr = (debitBank != null && debitBank.isNotEmpty) ? debitBank : 'Account';
+        final toStr = (creditBank != null && creditBank.isNotEmpty) ? creditBank : 'Account';
+        final selfTransferDesc = 'Self Transfer ($fromStr ➔ $toStr)';
+        final mergedRaw = '${inFlight.rawSmsBody ?? ""}\n---\n${rawSmsBody ?? ""}';
+
+        final existingRefDocs = await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('transactions')
+            .where('refNumber', isEqualTo: cleanRef)
+            .limit(1)
+            .get();
+
+        if (existingRefDocs.docs.isNotEmpty) {
+          await existingRefDocs.docs.first.reference.update({
+            'categoryId': 'self_transfer',
+            'categoryName': 'Self Transfer',
+            'iconCodePoint': Icons.sync_alt_rounded.codePoint,
+            'colorValue': const Color(0xFF607D8B).toARGB32(),
+            'description': selfTransferDesc,
+            'isExpense': true,
+            'bankAccount': debitBank,
+            'merchantName': creditBank ?? 'Self Transfer',
+            'rawSmsBody': mergedRaw,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        } else {
+          final stTx = TransactionModel(
+            id: '',
+            amount: amount,
+            description: selfTransferDesc,
+            categoryId: 'self_transfer',
+            categoryName: 'Self Transfer',
+            iconCodePoint: Icons.sync_alt_rounded.codePoint,
+            colorValue: const Color(0xFF607D8B).toARGB32(),
+            date: date ?? DateTime.now(),
+            userId: overrideUserId ?? user.uid,
+            isExpense: true,
+            isShared: isShared && groupId != null,
+            groupId: (isShared && groupId != null) ? groupId : null,
+            paymentMode: paymentMode,
+            smsHash: smsHash,
+            merchantName: creditBank ?? 'Self Transfer',
+            bankAccount: debitBank,
+            refNumber: refNumber,
+            rawSmsBody: mergedRaw,
+          );
+          final map = stTx.toMap();
+          map['createdAt'] = FieldValue.serverTimestamp();
+          await _firestore.collection('users').doc(user.uid).collection('transactions').add(map);
+        }
+
+        if (cleanHash.isNotEmpty) {
+          await AutoSmsService.markHashSynced(cleanHash);
+        }
+        if (inFlight.smsHash != null && inFlight.smsHash!.isNotEmpty) {
+          await AutoSmsService.markHashSynced(inFlight.smsHash!);
+        }
+
+        state = const AsyncValue.data(null);
+        return true;
+      }
+
+      _inFlightSelfTransferMap[cleanRef] = InFlightRefInfo(
+        amount: amount,
+        isExpense: isExpense,
+        bankAccount: bankAccount,
+        merchantName: merchantName,
+        smsHash: smsHash,
+        rawSmsBody: rawSmsBody,
+      );
+      Future.delayed(const Duration(seconds: 45), () => _inFlightSelfTransferMap.remove(cleanRef));
+    }
+
+    final inFlightRefKey = cleanRef.isNotEmpty ? '${cleanRef}_$isExpense' : '';
+    if (inFlightRefKey.isNotEmpty) {
+      if (_inFlightRefNumbers.contains(inFlightRefKey)) {
+        debugPrint('[TransactionViewModel] addTransaction skipped - ref $inFlightRefKey already in-flight.');
+        return true;
+      }
+      _inFlightRefNumbers.add(inFlightRefKey);
+      Future.delayed(const Duration(seconds: 30), () => _inFlightRefNumbers.remove(inFlightRefKey));
+    }
+
     state = const AsyncValue.loading();
     try {
+      // 2. Database level deduplication verification for personal transactions
+      if (!isShared && groupId == null) {
+        if (cleanHash.isNotEmpty) {
+          final hashDoc = await _firestore
+              .collection('users')
+              .doc(user.uid)
+              .collection('transactions')
+              .where('smsHash', isEqualTo: cleanHash)
+              .limit(1)
+              .get();
+          if (hashDoc.docs.isNotEmpty) {
+            debugPrint('[TransactionViewModel] Duplicate smsHash $cleanHash found in Firestore. Skipping.');
+            state = const AsyncValue.data(null);
+            return true;
+          }
+        }
+
+        if (cleanRef.isNotEmpty) {
+          final refDoc = await _firestore
+              .collection('users')
+              .doc(user.uid)
+              .collection('transactions')
+              .where('refNumber', isEqualTo: cleanRef)
+              .limit(1)
+              .get();
+          if (refDoc.docs.isNotEmpty) {
+            final existingDoc = refDoc.docs.first;
+            final existingData = existingDoc.data();
+            final existingIsExpense = existingData['isExpense'] as bool? ?? true;
+            final String existingCatId = existingData['categoryId'] as String? ?? '';
+            final double existingAmount = (existingData['amount'] as num?)?.toDouble() ?? 0.0;
+            final String? existingBankAccount = existingData['bankAccount'] as String?;
+
+            // Branch 1: Classic Debit + Credit pair (opposite directions)
+            // Branch 2: Same-direction (e.g. Credit + Credit) pair from different banks with same Ref ID
+            final bool isOppositeDirection = existingIsExpense != isExpense;
+            final bool isSameRefAmountDifferentBank =
+                (existingAmount - amount).abs() < 0.01 &&
+                existingCatId != 'self_transfer' &&
+                existingBankAccount != null &&
+                bankAccount != null &&
+                existingBankAccount.toLowerCase().trim() != bankAccount.toLowerCase().trim();
+
+            if ((isOppositeDirection || isSameRefAmountDifferentBank) &&
+                (existingAmount - amount).abs() < 0.01 &&
+                existingCatId != 'self_transfer') {
+              debugPrint('[TransactionViewModel] Self Transfer detected for refNumber: $cleanRef! Upgrading to Self Transfer.');
+              String? debitBank;
+              String? creditBank;
+              if (isOppositeDirection) {
+                debitBank = isExpense ? bankAccount : existingBankAccount;
+                creditBank = isExpense ? existingBankAccount : bankAccount;
+              } else {
+                debitBank = existingBankAccount;
+                creditBank = bankAccount;
+              }
+
+              final fromStr = (debitBank != null && debitBank.isNotEmpty) ? debitBank : 'Account';
+              final toStr = (creditBank != null && creditBank.isNotEmpty) ? creditBank : 'Account';
+              final selfTransferDesc = 'Self Transfer ($fromStr ➔ $toStr)';
+
+              final existingRawBody = existingData['rawSmsBody'] as String? ?? '';
+              final mergedRawBody = (rawSmsBody != null && rawSmsBody.isNotEmpty)
+                  ? (existingRawBody.isNotEmpty ? '$existingRawBody\n---\n$rawSmsBody' : rawSmsBody)
+                  : existingRawBody;
+
+              await existingDoc.reference.update({
+                'categoryId': 'self_transfer',
+                'categoryName': 'Self Transfer',
+                'iconCodePoint': Icons.sync_alt_rounded.codePoint,
+                'colorValue': const Color(0xFF607D8B).toARGB32(),
+                'description': selfTransferDesc,
+                'isExpense': true,
+                'bankAccount': debitBank,
+                'merchantName': creditBank ?? 'Self Transfer',
+                'rawSmsBody': mergedRawBody,
+                'updatedAt': FieldValue.serverTimestamp(),
+              });
+
+              if (cleanHash.isNotEmpty) {
+                await AutoSmsService.markHashSynced(cleanHash);
+              }
+
+              state = const AsyncValue.data(null);
+              return true;
+            }
+
+            debugPrint('[TransactionViewModel] Duplicate refNumber $cleanRef found in Firestore. Skipping.');
+            state = const AsyncValue.data(null);
+            return true;
+          }
+        }
+      }
       final transaction = TransactionModel(
         id: '',
         amount: amount,
@@ -691,7 +1259,15 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
         splitAmounts: (isShared && groupId != null) ? splitAmounts : null,
         groupId: (isShared && groupId != null) ? groupId : null,
         paymentMode: paymentMode,
+        smsHash: smsHash,
+        merchantName: merchantName,
+        bankAccount: bankAccount,
+        refNumber: refNumber,
+        rawSmsBody: rawSmsBody,
       );
+
+      final map = transaction.toMap();
+      map['createdAt'] = FieldValue.serverTimestamp();
 
       if (isShared && groupId != null) {
         String? wagesTargetUserId;
@@ -707,12 +1283,12 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
             .collection('groups')
             .doc(groupId)
             .collection('transactions')
-            .add(transaction.toMap());
+            .add(map);
             
         await _logGroupAction(
           groupId,
           'add',
-          "Added transaction: ₹${amount.toStringAsFixed(2)} (${isExpense ? 'Expense' : 'Income'}) for ${description.isNotEmpty ? description : category.name}",
+          "Added transaction: ₹${amount.toStringAsFixed(2)} (${isExpense ? 'Paid' : 'Received'}) for ${description.isNotEmpty ? description : category.name}",
           targetUserId: wagesTargetUserId ?? (overrideUserId ?? user.uid),
         );
       } else {
@@ -720,20 +1296,48 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
             .collection('users')
             .doc(user.uid)
             .collection('transactions')
-            .add(transaction.toMap());
+            .add(map);
       }
 
-      await NotificationHelper().showAddExpenseNotification(
-        amount: amount,
-        categoryName: category.name,
-        isExpense: isExpense, // Passes your boolean flag cleanly
-      );
+      if (!silentNotification) {
+        await NotificationHelper().showAddExpenseNotification(
+          amount: amount,
+          categoryName: category.name,
+          isExpense: isExpense, // Passes your boolean flag cleanly
+        );
+      }
 
       state = const AsyncValue.data(null);
       return true;
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
       return false;
+    }
+  }
+
+  /// Adds multiple transactions in a single atomic Firestore WriteBatch roundtrip.
+  /// Returns the count of successfully committed transactions.
+  Future<int> addTransactionsBatch(List<TransactionModel> transactions) async {
+    final user = ref.read(firebaseAuthProvider).currentUser;
+    if (user == null || transactions.isEmpty) return 0;
+
+    state = const AsyncValue.loading();
+    try {
+      final batch = _firestore.batch();
+      final userTxCol = _firestore.collection('users').doc(user.uid).collection('transactions');
+
+      for (final tx in transactions) {
+        final docRef = userTxCol.doc();
+        batch.set(docRef, tx.toMap());
+      }
+
+      await batch.commit();
+      state = const AsyncValue.data(null);
+      return transactions.length;
+    } catch (e, stack) {
+      debugPrint('[TransactionViewModel] addTransactionsBatch error: $e');
+      state = AsyncValue.error(e, stack);
+      return 0;
     }
   }
 
@@ -808,7 +1412,7 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
           logDetails.add("Note: '${originalTransaction.description}' -> '$description'");
         }
         if (originalTransaction.isExpense != isExpense) {
-          logDetails.add("Type: ${originalTransaction.isExpense ? 'Expense' : 'Income'} -> ${isExpense ? 'Expense' : 'Income'}");
+          logDetails.add("Type: ${originalTransaction.isExpense ? 'Paid' : 'Received'} -> ${isExpense ? 'Paid' : 'Received'}");
         }
         final detailsStr = logDetails.isEmpty ? "Updated fields" : logDetails.join("; ");
         await _logGroupAction(
@@ -872,6 +1476,10 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
             .delete();
       }
 
+      if (transaction.smsHash != null && transaction.smsHash!.isNotEmpty) {
+        await AutoSmsService.markHashDiscarded(transaction.smsHash!);
+      }
+
       state = const AsyncValue.data(null);
       return true;
     } catch (e, stack) {
@@ -907,7 +1515,7 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
         await _logGroupAction(
           transaction.groupId!,
           'toggle_type',
-          "Changed type of transaction '${transaction.description.isNotEmpty ? transaction.description : transaction.categoryName}' from ${transaction.isExpense ? 'Expense' : 'Income'} to ${newIsExpense ? 'Expense' : 'Income'}",
+          "Changed type of transaction '${transaction.description.isNotEmpty ? transaction.description : transaction.categoryName}' from ${transaction.isExpense ? 'Paid' : 'Received'} to ${newIsExpense ? 'Paid' : 'Received'}",
           targetUserId: wagesTargetUserId ?? (transaction.splitWith?.firstOrNull ?? transaction.userId),
         );
       } else {
