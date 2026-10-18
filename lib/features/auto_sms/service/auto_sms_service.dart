@@ -219,7 +219,7 @@ class AutoSmsService {
           _startListening(ref);
           await ref.read(pendingSmsListProvider.notifier).reloadFromPrefs();
           if (runStartupSync) {
-            ref.read(pendingSmsListProvider.notifier).performStartupSilentSync();
+            await ref.read(pendingSmsListProvider.notifier).performStartupSilentSync();
           }
         }
       }

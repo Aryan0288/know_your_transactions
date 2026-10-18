@@ -46,7 +46,15 @@ class SmsReceiver : BroadcastReceiver() {
             "pre-approved", "pre approved", "apply now", "click here", "avail loan", "loan approved",
             "credit limit is", "congratulations", "special offer", "exclusive offer",
             "request to pay", "requested money", "request received", "due date is", "bill generated",
-            "payment due", "will be debited on"
+            "payment due", "will be debited on", "bit.ly/", "tinyurl.com/", "cutt.ly/", "is.gd/",
+            "rb.gy/", "shorturl.at/", "ct3.io/", "dearclient", "clientcode", "pleasecheck",
+            "check account details", "regardsitisbl", "itisbl", "rummy", "ludo", "fantasy",
+            "dream11", "my11circle", "winzo", "zupee", "poker", "teen patti", "teenpatti",
+            "casino", "jackpot", "winnings", "welcome bonus", "joining bonus", "signup bonus",
+            "sign up bonus", "wallet bonus", "bonus credited", "claim now", "withdraw now",
+            "redeem now", "can be credited", "will be credited", "ready to be credited",
+            "credited instantly", "get instant", "instant loan", "eligible for", "approved for",
+            "use code", "coupon code", "promo code", "shop now", "buy now", "recharge now"
         )
         private val SELF_TRANSFER_KEYWORDS = listOf(
             "self transfer", "transfer to own a/c", "own account transfer"
@@ -72,8 +80,28 @@ class SmsReceiver : BroadcastReceiver() {
             Pattern.CASE_INSENSITIVE
         )
 
+        private val UPI_SLASH_REF_PATTERN = Pattern.compile(
+            """upi\/(?:cr|dr)\/([a-zA-Z0-9]{6,25})""",
+            Pattern.CASE_INSENSITIVE
+        )
+
+        private val RTGS_REF_PATTERN = Pattern.compile(
+            """(?:rtgs|neft|imps)[\s_-]*cr[\s\S]*?[\:\-]([A-Za-z0-9]{12,25})\.?(?:\s|avl|bal|$)""",
+            Pattern.CASE_INSENSITIVE
+        )
+
         private val REF_PATTERN = Pattern.compile(
-            """(?:upi\s*ref(?:\s*no)?|rrn|txn\s*(?:id|#|no)?|ref\s*no|ref|imps(?:\s*ref)?|neft(?:\s*ref)?|utr)[\:\/\s\-#]*([a-zA-Z0-9]{6,25})""",
+            """(?:transaction\s*id|txn\s*(?:id|#|no|ref)?|upi\s*(?:ref\s*(?:id|no|num)?|rrn|txn\s*(?:id|#|no)?|id|no)|rrn|ref\s*(?:id|no|num)?|imps(?:\s*ref)?|neft(?:\s*ref)?|utr)[\:\/\s\-#]+([a-zA-Z0-9]{6,25})""",
+            Pattern.CASE_INSENSITIVE
+        )
+
+        private val UPI_DIRECT_REF_PATTERN = Pattern.compile(
+            """\bupi[\:\/\s\-#]+(\d{6,25})""",
+            Pattern.CASE_INSENSITIVE
+        )
+
+        private val FAKE_MOBILE_ACCOUNT_PATTERN = Pattern.compile(
+            """\b(?:your\s+)?(?:a\/c|acct|account)\s*(?:no\.?)?[\s\:\-]*[6-9]\d{9}\b""",
             Pattern.CASE_INSENSITIVE
         )
 
@@ -185,13 +213,39 @@ class SmsReceiver : BroadcastReceiver() {
         context.sendBroadcast(broadcastIntent)
     }
 
+    private fun isSpamSender(sender: String): Boolean {
+        val s = sender.trim()
+        if (s.isEmpty()) return false
+        val upper = s.uppercase(Locale.getDefault())
+        if (upper.endsWith("-P") || upper.endsWith("_P")) return true
+        if (s.matches(Regex("^(?:\\+?91[\\-\\s]?)?[6-9]\\d{9}$"))) return true
+        if (upper.contains("ITISBL") || upper.contains("RUMMY") || upper.contains("DREAM11") ||
+            upper.contains("MY11") || upper.contains("WINZO") || upper.contains("ZUPEE") ||
+            upper.contains("POKER") || upper.contains("CASINO") || upper.contains("TEENP")
+        ) return true
+        return false
+    }
+
     private fun parseSms(body: String, sender: String = ""): JSONObject? {
+        if (isSpamSender(sender)) return null
         val lower = body.lowercase(Locale.getDefault())
         if (SPAM_KEYWORDS.any { lower.contains(it) }) return null
         if (SELF_TRANSFER_KEYWORDS.any { lower.contains(it) }) return null
+        if (FAKE_MOBILE_ACCOUNT_PATTERN.matcher(lower).find()) return null
 
-        val isExpense = DEBIT_KEYWORDS.any { lower.contains(it) }
-        val isCredit = CREDIT_KEYWORDS.any { lower.contains(it) }
+        var isExpense = DEBIT_KEYWORDS.any { lower.contains(it) }
+        var isCredit = CREDIT_KEYWORDS.any { lower.contains(it) }
+        if (isCredit && isExpense) {
+            if (lower.contains("deposited") || lower.contains("credited to") ||
+                lower.contains("credit alert") || lower.contains("received from") ||
+                lower.contains("towards interest") || lower.contains("interest credited") ||
+                lower.contains("refund") || lower.contains("cashback")
+            ) {
+                isExpense = false
+            } else {
+                isCredit = false
+            }
+        }
         if (!isExpense && !isCredit) return null
 
         val amount = extractAmount(body) ?: return null
@@ -200,6 +254,21 @@ class SmsReceiver : BroadcastReceiver() {
         val vendor = extractVendor(body, sender)
         val refNo = extractRef(body)
         val bankAccount = extractBankAccount(body, sender)
+
+        if (!isExpense) {
+            val hasBankingAnchor = !bankAccount.isNullOrEmpty() ||
+                !refNo.isNullOrEmpty() ||
+                body.contains("@") ||
+                lower.contains("salary") ||
+                lower.contains("interest") ||
+                lower.contains("dividend") ||
+                lower.contains("refund") ||
+                lower.contains("cashback") ||
+                lower.contains("neft") ||
+                lower.contains("rtgs") ||
+                lower.contains("imps")
+            if (!hasBankingAnchor) return null
+        }
         val dateRaw = extractDateRaw(body)
         val date = extractDate(body)
 
@@ -229,6 +298,7 @@ class SmsReceiver : BroadcastReceiver() {
             put("status", "pending")
             if (!refNo.isNullOrEmpty()) put("refNumber", refNo)
             if (!bankAccount.isNullOrEmpty()) put("bankAccount", bankAccount)
+            if (sender.isNotEmpty()) put("sender", sender)
         }
     }
 
@@ -262,13 +332,33 @@ class SmsReceiver : BroadcastReceiver() {
     }
 
     private fun extractRef(body: String): String? {
+        val mSlash = UPI_SLASH_REF_PATTERN.matcher(body)
+        if (mSlash.find()) {
+            val v = mSlash.group(1)?.trim()
+            if (v != null && v.any { it.isDigit() }) return v
+        }
+
+        val mRtgs = RTGS_REF_PATTERN.matcher(body)
+        if (mRtgs.find()) {
+            val v = mRtgs.group(1)?.trim()
+            if (v != null && v.length >= 8 && v.any { it.isDigit() }) return v
+        }
+
         val m = REF_PATTERN.matcher(body)
         if (m.find()) {
             val v = m.group(1)?.trim()
-            if (v != null && !v.matches(Regex("^(?:amount|number|balance|account|trans)$", RegexOption.IGNORE_CASE))) {
+            if (v != null && v.any { it.isDigit() } &&
+                !v.matches(Regex("^(?:amount|number|balance|account|trans|mandate|autopay|successful)$", RegexOption.IGNORE_CASE))
+            ) {
                 return v
             }
         }
+
+        val mUpiDirect = UPI_DIRECT_REF_PATTERN.matcher(body)
+        if (mUpiDirect.find()) {
+            return mUpiDirect.group(1)?.trim()
+        }
+
         return null
     }
 
@@ -409,7 +499,7 @@ class SmsReceiver : BroadcastReceiver() {
             }
         }
 
-        val accPattern = Pattern.compile("""(?:a\/c|acct|account|card)[\s\.\:\#\-]*(?:no\.?)?\s*([xX\*]*\d{3,6})""", Pattern.CASE_INSENSITIVE)
+        val accPattern = Pattern.compile("""(?:a\/c|acct|account|card)[\s\.\:\#\-]*(?:no\.?)?\s*([xX\*]+\d{3,6}|\d{3,6})(?!\d)""", Pattern.CASE_INSENSITIVE)
         val m = accPattern.matcher(body)
         var accDigits = ""
         if (m.find()) {

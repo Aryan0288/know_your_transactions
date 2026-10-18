@@ -420,7 +420,7 @@ class _PageSmsSettingsState extends ConsumerState<PageSmsSettings> with WidgetsB
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'All SMS processing is performed 100% locally on your device. SMS body text is never stored or sent to any server.',
+                          'All SMS parsing is performed 100% locally on your device. Matched transactions are synced only to your private encrypted ledger and never shared with third parties.',
                           style: GoogleFonts.manrope(fontSize: 11, color: const Color(0xFF2E7D32)),
                         ),
                       ],

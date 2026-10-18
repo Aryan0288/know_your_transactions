@@ -211,6 +211,7 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
 
                                   final count = transactions.where((t) {
                                     if (typeFilter == 'all') return true;
+                                    if (t.categoryId == 'self_transfer') return false;
 
                                     bool isExpenseForUser = t.isExpense;
                                     if (t.groupId != null && currentUserId != null) {
@@ -450,6 +451,7 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
 
                           final displayTransactions = transactions.where((t) {
                             if (typeFilter == 'all') return true;
+                            if (t.categoryId == 'self_transfer') return false;
 
                             // Determine if this is an expense or income for the user
                             bool isExpenseForUser = t.isExpense;

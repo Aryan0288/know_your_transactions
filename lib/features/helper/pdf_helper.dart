@@ -93,6 +93,7 @@ class PdfHelper {
     double totalExpense = 0.0;
 
     for (var t in transactions) {
+      if (t.categoryId == 'self_transfer') continue;
       if (t.isExpense) {
         totalExpense += t.amount;
       } else {
@@ -238,7 +239,9 @@ class PdfHelper {
                   t.categoryName.isNotEmpty ? t.categoryName : 'No Category',
                   // truncatedDesc,
                   desc,
-                  t.isExpense ? 'Paid' : 'Received',
+                  t.categoryId == 'self_transfer'
+                      ? 'Self Transfer'
+                      : (t.isExpense ? 'Paid' : 'Received'),
                   '${t.amount.toStringAsFixed(2)}',
                 ];
               }).toList(),
@@ -530,7 +533,9 @@ class PdfHelper {
 
     for (var t in transactions) {
       final dateStr = DateFormat('yyyy-MM-dd').format(t.date);
-      final typeStr = t.isExpense ? "Expense" : "Income";
+      final typeStr = t.categoryId == 'self_transfer'
+          ? "Self Transfer"
+          : (t.isExpense ? "Expense" : "Income");
       final catStr = t.categoryName.isNotEmpty ? t.categoryName : "No Category";
       final descStr = t.description.replaceAll(',', ' ');
       final payerName = t.userId == currentUserId ? "You" : (memberNames[t.userId] ?? "Member");

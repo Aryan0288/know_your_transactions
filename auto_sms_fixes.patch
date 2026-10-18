@@ -1,0 +1,1090 @@
+diff --git a/android/app/src/main/kotlin/com/apps/knowyourexpenses/SmsReceiver.kt b/android/app/src/main/kotlin/com/apps/knowyourexpenses/SmsReceiver.kt
+index 105073e..fc2c7e6 100644
+--- a/android/app/src/main/kotlin/com/apps/knowyourexpenses/SmsReceiver.kt
++++ b/android/app/src/main/kotlin/com/apps/knowyourexpenses/SmsReceiver.kt
+@@ -46,7 +46,15 @@ class SmsReceiver : BroadcastReceiver() {
+             "pre-approved", "pre approved", "apply now", "click here", "avail loan", "loan approved",
+             "credit limit is", "congratulations", "special offer", "exclusive offer",
+             "request to pay", "requested money", "request received", "due date is", "bill generated",
+-            "payment due", "will be debited on"
++            "payment due", "will be debited on", "bit.ly/", "tinyurl.com/", "cutt.ly/", "is.gd/",
++            "rb.gy/", "shorturl.at/", "ct3.io/", "dearclient", "clientcode", "pleasecheck",
++            "check account details", "regardsitisbl", "itisbl", "rummy", "ludo", "fantasy",
++            "dream11", "my11circle", "winzo", "zupee", "poker", "teen patti", "teenpatti",
++            "casino", "jackpot", "winnings", "welcome bonus", "joining bonus", "signup bonus",
++            "sign up bonus", "wallet bonus", "bonus credited", "claim now", "withdraw now",
++            "redeem now", "can be credited", "will be credited", "ready to be credited",
++            "credited instantly", "get instant", "instant loan", "eligible for", "approved for",
++            "use code", "coupon code", "promo code", "shop now", "buy now", "recharge now"
+         )
+         private val SELF_TRANSFER_KEYWORDS = listOf(
+             "self transfer", "transfer to own a/c", "own account transfer"
+@@ -72,8 +80,28 @@ class SmsReceiver : BroadcastReceiver() {
+             Pattern.CASE_INSENSITIVE
+         )
+ 
++        private val UPI_SLASH_REF_PATTERN = Pattern.compile(
++            """upi\/(?:cr|dr)\/([a-zA-Z0-9]{6,25})""",
++            Pattern.CASE_INSENSITIVE
++        )
++
++        private val RTGS_REF_PATTERN = Pattern.compile(
++            """(?:rtgs|neft|imps)[\s_-]*cr[\s\S]*?[\:\-]([A-Za-z0-9]{12,25})\.?(?:\s|avl|bal|$)""",
++            Pattern.CASE_INSENSITIVE
++        )
++
+         private val REF_PATTERN = Pattern.compile(
+-            """(?:upi\s*ref(?:\s*no)?|rrn|txn\s*(?:id|#|no)?|ref\s*no|ref|imps(?:\s*ref)?|neft(?:\s*ref)?|utr)[\:\/\s\-#]*([a-zA-Z0-9]{6,25})""",
++            """(?:transaction\s*id|txn\s*(?:id|#|no|ref)?|upi\s*(?:ref\s*(?:id|no|num)?|rrn|txn\s*(?:id|#|no)?|id|no)|rrn|ref\s*(?:id|no|num)?|imps(?:\s*ref)?|neft(?:\s*ref)?|utr)[\:\/\s\-#]+([a-zA-Z0-9]{6,25})""",
++            Pattern.CASE_INSENSITIVE
++        )
++
++        private val UPI_DIRECT_REF_PATTERN = Pattern.compile(
++            """\bupi[\:\/\s\-#]+(\d{6,25})""",
++            Pattern.CASE_INSENSITIVE
++        )
++
++        private val FAKE_MOBILE_ACCOUNT_PATTERN = Pattern.compile(
++            """\b(?:your\s+)?(?:a\/c|acct|account)\s*(?:no\.?)?[\s\:\-]*[6-9]\d{9}\b""",
+             Pattern.CASE_INSENSITIVE
+         )
+ 
+@@ -185,13 +213,39 @@ class SmsReceiver : BroadcastReceiver() {
+         context.sendBroadcast(broadcastIntent)
+     }
+ 
++    private fun isSpamSender(sender: String): Boolean {
++        val s = sender.trim()
++        if (s.isEmpty()) return false
++        val upper = s.uppercase(Locale.getDefault())
++        if (upper.endsWith("-P") || upper.endsWith("_P")) return true
++        if (s.matches(Regex("^(?:\\+?91[\\-\\s]?)?[6-9]\\d{9}$"))) return true
++        if (upper.contains("ITISBL") || upper.contains("RUMMY") || upper.contains("DREAM11") ||
++            upper.contains("MY11") || upper.contains("WINZO") || upper.contains("ZUPEE") ||
++            upper.contains("POKER") || upper.contains("CASINO") || upper.contains("TEENP")
++        ) return true
++        return false
++    }
++
+     private fun parseSms(body: String, sender: String = ""): JSONObject? {
++        if (isSpamSender(sender)) return null
+         val lower = body.lowercase(Locale.getDefault())
+         if (SPAM_KEYWORDS.any { lower.contains(it) }) return null
+         if (SELF_TRANSFER_KEYWORDS.any { lower.contains(it) }) return null
+-
+-        val isExpense = DEBIT_KEYWORDS.any { lower.contains(it) }
+-        val isCredit = CREDIT_KEYWORDS.any { lower.contains(it) }
++        if (FAKE_MOBILE_ACCOUNT_PATTERN.matcher(lower).find()) return null
++
++        var isExpense = DEBIT_KEYWORDS.any { lower.contains(it) }
++        var isCredit = CREDIT_KEYWORDS.any { lower.contains(it) }
++        if (isCredit && isExpense) {
++            if (lower.contains("deposited") || lower.contains("credited to") ||
++                lower.contains("credit alert") || lower.contains("received from") ||
++                lower.contains("towards interest") || lower.contains("interest credited") ||
++                lower.contains("refund") || lower.contains("cashback")
++            ) {
++                isExpense = false
++            } else {
++                isCredit = false
++            }
++        }
+         if (!isExpense && !isCredit) return null
+ 
+         val amount = extractAmount(body) ?: return null
+@@ -200,6 +254,21 @@ class SmsReceiver : BroadcastReceiver() {
+         val vendor = extractVendor(body, sender)
+         val refNo = extractRef(body)
+         val bankAccount = extractBankAccount(body, sender)
++
++        if (!isExpense) {
++            val hasBankingAnchor = !bankAccount.isNullOrEmpty() ||
++                !refNo.isNullOrEmpty() ||
++                body.contains("@") ||
++                lower.contains("salary") ||
++                lower.contains("interest") ||
++                lower.contains("dividend") ||
++                lower.contains("refund") ||
++                lower.contains("cashback") ||
++                lower.contains("neft") ||
++                lower.contains("rtgs") ||
++                lower.contains("imps")
++            if (!hasBankingAnchor) return null
++        }
+         val dateRaw = extractDateRaw(body)
+         val date = extractDate(body)
+ 
+@@ -229,6 +298,7 @@ class SmsReceiver : BroadcastReceiver() {
+             put("status", "pending")
+             if (!refNo.isNullOrEmpty()) put("refNumber", refNo)
+             if (!bankAccount.isNullOrEmpty()) put("bankAccount", bankAccount)
++            if (sender.isNotEmpty()) put("sender", sender)
+         }
+     }
+ 
+@@ -262,13 +332,33 @@ class SmsReceiver : BroadcastReceiver() {
+     }
+ 
+     private fun extractRef(body: String): String? {
++        val mSlash = UPI_SLASH_REF_PATTERN.matcher(body)
++        if (mSlash.find()) {
++            val v = mSlash.group(1)?.trim()
++            if (v != null && v.any { it.isDigit() }) return v
++        }
++
++        val mRtgs = RTGS_REF_PATTERN.matcher(body)
++        if (mRtgs.find()) {
++            val v = mRtgs.group(1)?.trim()
++            if (v != null && v.length >= 8 && v.any { it.isDigit() }) return v
++        }
++
+         val m = REF_PATTERN.matcher(body)
+         if (m.find()) {
+             val v = m.group(1)?.trim()
+-            if (v != null && !v.matches(Regex("^(?:amount|number|balance|account|trans)$", RegexOption.IGNORE_CASE))) {
++            if (v != null && v.any { it.isDigit() } &&
++                !v.matches(Regex("^(?:amount|number|balance|account|trans|mandate|autopay|successful)$", RegexOption.IGNORE_CASE))
++            ) {
+                 return v
+             }
+         }
++
++        val mUpiDirect = UPI_DIRECT_REF_PATTERN.matcher(body)
++        if (mUpiDirect.find()) {
++            return mUpiDirect.group(1)?.trim()
++        }
++
+         return null
+     }
+ 
+@@ -409,7 +499,7 @@ class SmsReceiver : BroadcastReceiver() {
+             }
+         }
+ 
+-        val accPattern = Pattern.compile("""(?:a\/c|acct|account|card)[\s\.\:\#\-]*(?:no\.?)?\s*([xX\*]*\d{3,6})""", Pattern.CASE_INSENSITIVE)
++        val accPattern = Pattern.compile("""(?:a\/c|acct|account|card)[\s\.\:\#\-]*(?:no\.?)?\s*([xX\*]+\d{3,6}|\d{3,6})(?!\d)""", Pattern.CASE_INSENSITIVE)
+         val m = accPattern.matcher(body)
+         var accDigits = ""
+         if (m.find()) {
+diff --git a/lib/features/auto_sms/service/auto_sms_service.dart b/lib/features/auto_sms/service/auto_sms_service.dart
+index c76eb84..9eb2377 100644
+--- a/lib/features/auto_sms/service/auto_sms_service.dart
++++ b/lib/features/auto_sms/service/auto_sms_service.dart
+@@ -219,7 +219,7 @@ class AutoSmsService {
+           _startListening(ref);
+           await ref.read(pendingSmsListProvider.notifier).reloadFromPrefs();
+           if (runStartupSync) {
+-            ref.read(pendingSmsListProvider.notifier).performStartupSilentSync();
++            await ref.read(pendingSmsListProvider.notifier).performStartupSilentSync();
+           }
+         }
+       }
+diff --git a/lib/features/auto_sms/service/sms_parser_service.dart b/lib/features/auto_sms/service/sms_parser_service.dart
+index c55cdcb..730f46a 100644
+--- a/lib/features/auto_sms/service/sms_parser_service.dart
++++ b/lib/features/auto_sms/service/sms_parser_service.dart
+@@ -6,6 +6,10 @@ class SmsParserService {
+   static ModelPendingSms? parseSms(String body, {String? sender, DateTime? messageTimestamp}) {
+     if (body.isEmpty) return null;
+ 
++    if (_isSpamSender(sender)) {
++      return null;
++    }
++
+     final lower = body.toLowerCase();
+ 
+     // 1. Ignore OTPs, promotional, failed/declined transactions, requests
+@@ -85,6 +89,25 @@ class SmsParserService {
+     // 7. Extract Bank Account & Card Details
+     final String? bankAccount = _extractBankAccount(body, sender);
+ 
++    // 7B. Structural Banking Anchor Verification for Credits:
++    // Blocks fake "Rs. 4,000 credited" / "received Rs.3675" ads that lack a bank/account/ref/VPA
++    if (!isExpense) {
++      final bool hasBankingAnchor = (bankAccount != null && bankAccount.isNotEmpty) ||
++          (refNo != null && refNo.isNotEmpty) ||
++          body.contains('@') ||
++          lower.contains('salary') ||
++          lower.contains('interest') ||
++          lower.contains('dividend') ||
++          lower.contains('refund') ||
++          lower.contains('cashback') ||
++          lower.contains('neft') ||
++          lower.contains('rtgs') ||
++          lower.contains('imps');
++      if (!hasBankingAnchor) {
++        return null;
++      }
++    }
++
+     // 8. Generate Smart Title & Description
+     final smartDetails = generateSmartDetails(vendorName, body, isExpense);
+ 
+@@ -107,6 +130,33 @@ class SmsParserService {
+     );
+   }
+ 
++  /// Checks if the SMS sender header is a promotional DLT header (-P), a personal mobile number, or known scam/gaming ID.
++  static bool _isSpamSender(String? sender) {
++    if (sender == null || sender.trim().isEmpty) return false;
++    final s = sender.trim();
++    final upper = s.toUpperCase();
++
++    // TRAI DLT Promotional category headers end with "-P" (e.g. "VM-RUMMY-P", "AD-LOANS-P")
++    if (RegExp(r'[\-\_]P$').hasMatch(upper)) return true;
++
++    // Personal 10-digit Indian mobile numbers (+91 / 91 / 10 digits)
++    if (RegExp(r'^(?:\+?91[\-\s]?)?[6-9]\d{9}$').hasMatch(s)) return true;
++
++    // Known scam / DLT template-abused / gaming sender tokens
++    if (upper.contains('ITISBL') ||
++        upper.contains('RUMMY') ||
++        upper.contains('DREAM11') ||
++        upper.contains('MY11') ||
++        upper.contains('WINZO') ||
++        upper.contains('ZUPEE') ||
++        upper.contains('POKER') ||
++        upper.contains('CASINO') ||
++        upper.contains('TEENP')) {
++      return true;
++    }
++    return false;
++  }
++
+   static bool _isSpamOrNonFinancial(String lower) {
+     // 0. Receipt Exemption: If this is an explicit completed recharge/payment receipt with a Txn ID or Ref, do not flag as spam!
+     final bool isCompletedReceipt = (lower.contains('recharge successful') ||
+@@ -317,6 +367,77 @@ class SmsParserService {
+       return true;
+     }
+ 
++    // 12. Phishing / Smishing Short Links, Template-Stuffed Scams (e.g. ITISBL) & Unmasked 10-Digit Mobile Account Spoofing
++    if (lower.contains('bit.ly/') ||
++        lower.contains('tinyurl.com/') ||
++        lower.contains('cutt.ly/') ||
++        lower.contains('is.gd/') ||
++        lower.contains('rb.gy/') ||
++        lower.contains('shorturl.at/') ||
++        lower.contains('v.gd/') ||
++        lower.contains('ow.ly/') ||
++        lower.contains('rebrand.ly/') ||
++        lower.contains('tiny.cc/') ||
++        lower.contains('ct3.io/') ||
++        lower.contains('t.me/') ||
++        lower.contains('wa.me/') ||
++        lower.contains('dearclient') ||
++        lower.contains('clientcode') ||
++        lower.contains('pleasecheck') ||
++        lower.contains('check account details') ||
++        lower.contains('regardsitisbl') ||
++        lower.contains('itisbl') ||
++        RegExp(r'\b(?:your\s+)?(?:a\/c|acct|account)\s*(?:no\.?)?[\s\:\-]*[6-9]\d{9}\b', caseSensitive: false).hasMatch(lower)) {
++      return true;
++    }
++
++    // 13. Gaming, Rummy, Fantasy, Wallet Bonus & Fake "4000 Credited" Ad Lures
++    if (lower.contains('rummy') ||
++        lower.contains('ludo') ||
++        lower.contains('fantasy') ||
++        lower.contains('dream11') ||
++        lower.contains('my11circle') ||
++        lower.contains('winzo') ||
++        lower.contains('zupee') ||
++        lower.contains('poker') ||
++        lower.contains('teen patti') ||
++        lower.contains('teenpatti') ||
++        lower.contains('casino') ||
++        lower.contains('jackpot') ||
++        lower.contains('spin & win') ||
++        lower.contains('spin and win') ||
++        lower.contains('winnings') ||
++        lower.contains('welcome bonus') ||
++        lower.contains('joining bonus') ||
++        lower.contains('signup bonus') ||
++        lower.contains('sign up bonus') ||
++        lower.contains('cash bonus') ||
++        lower.contains('wallet bonus') ||
++        lower.contains('bonus credited') ||
++        lower.contains('game wallet') ||
++        lower.contains('play now') ||
++        lower.contains('play & win') ||
++        lower.contains('play and win') ||
++        lower.contains('free cash') ||
++        lower.contains('gift voucher') ||
++        lower.contains('claim now') ||
++        lower.contains('claim your') ||
++        lower.contains('withdraw now') ||
++        lower.contains('redeem now') ||
++        lower.contains('collect now') ||
++        lower.contains('can be credited') ||
++        lower.contains('will be credited') ||
++        lower.contains('ready to be credited') ||
++        lower.contains('credited instantly') ||
++        lower.contains('get instant') ||
++        lower.contains('instant loan') ||
++        lower.contains('eligible for') ||
++        lower.contains('approved for') ||
++        RegExp(r'(?:up\s*to|upto|worth)\s*(?:rs\.?|inr\.?|₹)?\s*[\d,]+', caseSensitive: false).hasMatch(lower) ||
++        RegExp(r'(?:rs\.?|inr\.?|₹)?\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|is\s+)?credited\s+(?:in|to)\s+(?:your\s+)?(?:wallet|rummy|game|bonus|app|play|fantasy|reward)', caseSensitive: false).hasMatch(lower)) {
++      return true;
++    }
++
+     return false;
+   }
+ 
+@@ -883,6 +1004,9 @@ class SmsParserService {
+     return 'hash_${cleanVendor}_${fallbackSnippet}_${amountInt}_$typeSuffix';
+   }
+ 
++  static String? extractBankAccount(String body, [String? sender]) =>
++      _extractBankAccount(body, sender);
++
+   static String? _extractBankAccount(String body, String? sender) {
+     // 1. Detect Bank Name
+     String bankName = '';
+@@ -918,9 +1042,9 @@ class SmsParserService {
+       }
+     }
+ 
+-    // 2. Extract Account / Card digits
++    // 2. Extract Account / Card digits (with negative lookahead (?!\d) so 10-digit phone numbers are rejected)
+     final RegExp accRegex = RegExp(
+-      r'(?:a\/c|acct|account|card)[\s\.\:\#\-]*(?:no\.?)?\s*([xX\*]*\d{3,6})',
++      r'(?:a\/c|acct|account|card)[\s\.\:\#\-]*(?:no\.?)?\s*([xX\*]+\d{3,6}|\d{3,6})(?!\d)',
+       caseSensitive: false,
+     );
+     final match = accRegex.firstMatch(body);
+diff --git a/lib/features/auto_sms/view/page_sms_settings.dart b/lib/features/auto_sms/view/page_sms_settings.dart
+index afe478e..3dc2894 100644
+--- a/lib/features/auto_sms/view/page_sms_settings.dart
++++ b/lib/features/auto_sms/view/page_sms_settings.dart
+@@ -420,7 +420,7 @@ class _PageSmsSettingsState extends ConsumerState<PageSmsSettings> with WidgetsB
+                         ),
+                         const SizedBox(height: 2),
+                         Text(
+-                          'All SMS processing is performed 100% locally on your device. SMS body text is never stored or sent to any server.',
++                          'All SMS parsing is performed 100% locally on your device. Matched transactions are synced only to your private encrypted ledger and never shared with third parties.',
+                           style: GoogleFonts.manrope(fontSize: 11, color: const Color(0xFF2E7D32)),
+                         ),
+                       ],
+diff --git a/lib/features/auto_sms/view_model/auto_sms_provider.dart b/lib/features/auto_sms/view_model/auto_sms_provider.dart
+index 8ec07fb..004132a 100644
+--- a/lib/features/auto_sms/view_model/auto_sms_provider.dart
++++ b/lib/features/auto_sms/view_model/auto_sms_provider.dart
+@@ -25,6 +25,7 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
+   static const String _prefsKey = 'pending_auto_sms_items';
+   static bool _isSyncingInProgress = false;
+   static bool _isSilentSyncRunning = false;
++  static bool _isProcessingPersonalItems = false;
+ 
+   PendingSmsNotifier(this.ref) : super([]) {
+     _loadFromPrefs();
+@@ -43,7 +44,35 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
+       final String? jsonStr = prefs.getString(_prefsKey);
+       if (jsonStr != null && jsonStr.isNotEmpty) {
+         final List<dynamic> list = jsonDecode(jsonStr);
+-        state = list.map((item) => ModelPendingSms.fromMap(Map<String, dynamic>.from(item), item['id'])).toList();
++        final List<ModelPendingSms> normalized = [];
++        final Set<String> seenIds = {};
++
++        for (final rawItem in list) {
++          final map = Map<String, dynamic>.from(rawItem);
++          final fallbackItem = ModelPendingSms.fromMap(map, map['id']?.toString() ?? '');
++          // Re-parse through Dart SmsParserService so native SmsReceiver items get canonical Dart hashId, refNumber & spam filtering
++          if (fallbackItem.rawSmsBody.isNotEmpty) {
++            final reparsed = SmsParserService.parseSms(
++              fallbackItem.rawSmsBody,
++              sender: map['sender'] as String?,
++              messageTimestamp: fallbackItem.date,
++            );
++            if (reparsed == null) {
++              // Blocked by updated spam/scam filters
++              continue;
++            }
++            if (!seenIds.contains(reparsed.id)) {
++              seenIds.add(reparsed.id);
++              normalized.add(reparsed);
++            }
++          } else if (fallbackItem.id.isNotEmpty && !seenIds.contains(fallbackItem.id)) {
++            seenIds.add(fallbackItem.id);
++            normalized.add(fallbackItem);
++          }
++        }
++
++        state = normalized;
++        await _saveToPrefs();
+         await _autoProcessPersonalItems();
+       }
+     } catch (_) {}
+@@ -53,11 +82,14 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
+   Future<void> reloadFromPrefs() => _loadFromPrefs();
+ 
+   Future<void> _autoProcessPersonalItems() async {
+-    if (state.isEmpty) return;
++    if (state.isEmpty || _isProcessingPersonalItems) return;
+ 
+     final currentUser = FirebaseAuth.instance.currentUser;
+     if (currentUser == null) return;
+ 
++    _isProcessingPersonalItems = true;
++    try {
++
+     final itemsToProcess = List<ModelPendingSms>.from(state);
+     final categories = ref.read(categoriesProvider).value ?? kDefaultCategories;
+     final Set<String> processedIds = {};
+@@ -85,8 +117,9 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
+       final creditItem = list.where((i) => !i.isExpense).firstOrNull;
+ 
+       if (debitItem != null && creditItem != null) {
+-        processedIds.add(debitItem.id);
+-        processedIds.add(creditItem.id);
++        for (final grpItem in list) {
++          processedIds.add(grpItem.id);
++        }
+ 
+         final fromStr = (debitItem.bankAccount != null && debitItem.bankAccount!.isNotEmpty)
+             ? debitItem.bankAccount!
+@@ -117,8 +150,7 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
+             );
+ 
+         if (success) {
+-          await AutoSmsService.markHashSynced(debitItem.id);
+-          await AutoSmsService.markHashSynced(creditItem.id);
++          await AutoSmsService.markHashesSynced(list.map((e) => e.id));
+           debugPrint('[AutoSms] Successfully added paired Self Transfer: ₹${debitItem.amount} ($selfTransferDesc)');
+         }
+       }
+@@ -132,6 +164,17 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
+       if (cleanRef != null && cleanRef.isNotEmpty) {
+         // Layer 1: In-Memory Live Stream Match (0ms Latency)
+         final activeTransactions = ref.read(transactionsStreamProvider).value ?? [];
++        final alreadyMergedSelfTransfer = activeTransactions.any((t) =>
++            t.refNumber != null &&
++            t.refNumber!.toLowerCase().trim() == cleanRef &&
++            (t.amount - item.amount).abs() < 0.01 &&
++            t.categoryId == 'self_transfer');
++        if (alreadyMergedSelfTransfer) {
++          processedIds.add(item.id);
++          await AutoSmsService.markHashSynced(item.id);
++          continue;
++        }
++
+         final inMemoryMatch = activeTransactions.where((t) {
+           if (t.refNumber == null || t.refNumber!.isEmpty) return false;
+           if (t.refNumber!.toLowerCase().trim() != cleanRef) return false;
+@@ -209,6 +252,13 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
+             final String existingCatId = data['categoryId'] as String? ?? '';
+             final String? existingBankAccount = data['bankAccount'] as String?;
+ 
++            if (existingCatId == 'self_transfer' && (existingAmount - item.amount).abs() < 0.01) {
++              processedIds.add(item.id);
++              await AutoSmsService.markHashSynced(item.id);
++              merged = true;
++              break;
++            }
++
+             // Branch 1: Classic Debit + Credit pair (opposite directions)
+             // Branch 2: Same-direction (e.g. Credit + Credit) pair from different banks with same Ref ID
+             final bool isOppositeDirection = existingIsExpense != item.isExpense;
+@@ -292,8 +342,11 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
+       }
+     }
+ 
+-    state = state.where((item) => !processedIds.contains(item.id)).toList();
+-    await _saveToPrefs();
++      state = state.where((item) => !processedIds.contains(item.id)).toList();
++      await _saveToPrefs();
++    } finally {
++      _isProcessingPersonalItems = false;
++    }
+   }
+ 
+   Future<void> _saveToPrefs() async {
+@@ -412,6 +465,16 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
+     if (cleanRef != null && cleanRef.isNotEmpty) {
+       // Layer 1: In-Memory Live Stream Match (0ms Latency)
+       final activeTransactions = ref.read(transactionsStreamProvider).value ?? [];
++      final alreadyMergedSelfTransfer = activeTransactions.any((t) =>
++          t.refNumber != null &&
++          t.refNumber!.toLowerCase().trim() == cleanRef &&
++          (t.amount - parsedSms.amount).abs() < 0.01 &&
++          t.categoryId == 'self_transfer');
++      if (alreadyMergedSelfTransfer) {
++        await AutoSmsService.markHashSynced(parsedSms.id);
++        return;
++      }
++
+       final inMemoryMatch = activeTransactions.where((t) {
+         if (t.refNumber == null || t.refNumber!.isEmpty) return false;
+         if (t.refNumber!.toLowerCase().trim() != cleanRef) return false;
+@@ -487,6 +550,11 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
+           final String existingCatId = data['categoryId'] as String? ?? '';
+           final String? existingBankAccount = data['bankAccount'] as String?;
+ 
++          if (existingCatId == 'self_transfer' && (existingAmount - parsedSms.amount).abs() < 0.01) {
++            await AutoSmsService.markHashSynced(parsedSms.id);
++            return;
++          }
++
+           // Branch 1: Classic Debit + Credit pair (opposite directions)
+           // Branch 2: Same-direction (e.g. Credit + Credit) pair from different banks with same Ref ID
+           final bool isOppositeDirection = existingIsExpense != parsedSms.isExpense;
+@@ -681,8 +749,9 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
+         final creditItem = list.where((i) => !i.isExpense).firstOrNull;
+ 
+         if (debitItem != null && creditItem != null) {
+-          pairedSmsIds.add(debitItem.id);
+-          pairedSmsIds.add(creditItem.id);
++          for (final grpItem in list) {
++            pairedSmsIds.add(grpItem.id);
++          }
+ 
+           // Check if already active in Firestore
+           if (activeFirestoreHashes.contains(debitItem.id) ||
+@@ -885,6 +954,9 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
+       final isEnabled = prefs.getBool('auto_sms_enabled') ?? false;
+       if (!isEnabled) return;
+ 
++      // Flush any pending native receiver items first before scanning inbox
++      await _loadFromPrefs();
++
+       // Run one-time legacy build migration if not done yet
+       await _migrateOldBuildTransactions();
+ 
+@@ -966,8 +1038,9 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
+         final creditItem = list.where((i) => !i.isExpense).firstOrNull;
+ 
+         if (debitItem != null && creditItem != null) {
+-          pairedSmsIds.add(debitItem.id);
+-          pairedSmsIds.add(creditItem.id);
++          for (final grpItem in list) {
++            pairedSmsIds.add(grpItem.id);
++          }
+ 
+           if (activeFirestoreHashes.contains(debitItem.id) ||
+               activeFirestoreHashes.contains(creditItem.id) ||
+@@ -1616,6 +1689,10 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
+           isShared: targetGroupId != null && targetGroupId.isNotEmpty,
+           paymentMode: pendingItem.paymentMode,
+           smsHash: pendingItem.id,
++          merchantName: pendingItem.merchantName ?? pendingItem.vendorName,
++          bankAccount: pendingItem.bankAccount,
++          refNumber: pendingItem.refNumber,
++          rawSmsBody: pendingItem.rawSmsBody,
+         );
+ 
+     // Mark hash as synced
+diff --git a/lib/features/helper/pdf_helper.dart b/lib/features/helper/pdf_helper.dart
+index c9bb824..cc321bd 100644
+--- a/lib/features/helper/pdf_helper.dart
++++ b/lib/features/helper/pdf_helper.dart
+@@ -93,6 +93,7 @@ class PdfHelper {
+     double totalExpense = 0.0;
+ 
+     for (var t in transactions) {
++      if (t.categoryId == 'self_transfer') continue;
+       if (t.isExpense) {
+         totalExpense += t.amount;
+       } else {
+@@ -238,7 +239,9 @@ class PdfHelper {
+                   t.categoryName.isNotEmpty ? t.categoryName : 'No Category',
+                   // truncatedDesc,
+                   desc,
+-                  t.isExpense ? 'Paid' : 'Received',
++                  t.categoryId == 'self_transfer'
++                      ? 'Self Transfer'
++                      : (t.isExpense ? 'Paid' : 'Received'),
+                   '${t.amount.toStringAsFixed(2)}',
+                 ];
+               }).toList(),
+@@ -530,7 +533,9 @@ class PdfHelper {
+ 
+     for (var t in transactions) {
+       final dateStr = DateFormat('yyyy-MM-dd').format(t.date);
+-      final typeStr = t.isExpense ? "Expense" : "Income";
++      final typeStr = t.categoryId == 'self_transfer'
++          ? "Self Transfer"
++          : (t.isExpense ? "Expense" : "Income");
+       final catStr = t.categoryName.isNotEmpty ? t.categoryName : "No Category";
+       final descStr = t.description.replaceAll(',', ' ');
+       final payerName = t.userId == currentUserId ? "You" : (memberNames[t.userId] ?? "Member");
+diff --git a/lib/features/transaction/view/page_show_all_expenses.dart b/lib/features/transaction/view/page_show_all_expenses.dart
+index 0c114d2..ed1ed22 100644
+--- a/lib/features/transaction/view/page_show_all_expenses.dart
++++ b/lib/features/transaction/view/page_show_all_expenses.dart
+@@ -211,6 +211,7 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
+ 
+                                   final count = transactions.where((t) {
+                                     if (typeFilter == 'all') return true;
++                                    if (t.categoryId == 'self_transfer') return false;
+ 
+                                     bool isExpenseForUser = t.isExpense;
+                                     if (t.groupId != null && currentUserId != null) {
+@@ -450,6 +451,7 @@ class _ShowAllExpensesPageState extends ConsumerState<ShowAllExpensesPage>
+ 
+                           final displayTransactions = transactions.where((t) {
+                             if (typeFilter == 'all') return true;
++                            if (t.categoryId == 'self_transfer') return false;
+ 
+                             // Determine if this is an expense or income for the user
+                             bool isExpenseForUser = t.isExpense;
+diff --git a/lib/features/transaction/view/widgets/widget_export_bottom_sheet.dart b/lib/features/transaction/view/widgets/widget_export_bottom_sheet.dart
+index a809939..11b4053 100644
+--- a/lib/features/transaction/view/widgets/widget_export_bottom_sheet.dart
++++ b/lib/features/transaction/view/widgets/widget_export_bottom_sheet.dart
+@@ -315,9 +315,9 @@ class ExportBottomSheet extends ConsumerWidget {
+ 
+                 // C. Type filter
+                 if (transactionType == 'expense') {
+-                  filtered = filtered.where((t) => t.isExpense).toList();
++                  filtered = filtered.where((t) => t.isExpense && t.categoryId != 'self_transfer').toList();
+                 } else if (transactionType == 'income') {
+-                  filtered = filtered.where((t) => !t.isExpense).toList();
++                  filtered = filtered.where((t) => !t.isExpense && t.categoryId != 'self_transfer').toList();
+                 }
+ 
+                 if (filtered.isEmpty) {
+diff --git a/lib/features/transaction/view_model/view_model_transaction.dart b/lib/features/transaction/view_model/view_model_transaction.dart
+index 7d47418..509f1a1 100644
+--- a/lib/features/transaction/view_model/view_model_transaction.dart
++++ b/lib/features/transaction/view_model/view_model_transaction.dart
+@@ -271,12 +271,25 @@ void _runAutoHeal(List<TransactionModel> transactions, String userId, List<Categ
+   _hasPendingHeal = false;
+ 
+   try {
++    final userTxCol = FirebaseFirestore.instance
++        .collection('users')
++        .doc(userId)
++        .collection('transactions');
++    final batch = FirebaseFirestore.instance.batch();
++    int batchOps = 0;
++
+     final Map<String, List<TransactionModel>> refMap = {};
++    final Map<String, List<TransactionModel>> noRefDupMap = {};
++    final Set<String> deletedTxIds = {};
++
+     for (final tx in transactions) {
+-      // 0. Auto-Healer Purge: Remove falsely captured marketing/promotional SMS transactions or pre-debit notices
++      // 0. Auto-Healer Purge: Use SmsParserService as single source of truth to purge any fake/spam/scam SMS
+       if (tx.rawSmsBody != null && tx.rawSmsBody!.isNotEmpty) {
+-        final bodyLower = tx.rawSmsBody!.toLowerCase();
+-        final bool isMarketingSpam = bodyLower.contains('start sip') ||
++        final rawBody = tx.rawSmsBody!;
++        final bodyLower = rawBody.toLowerCase();
++        final isMergedSelfTransferBody = rawBody.contains('\n---\n');
++
++        final bool isLegacySpam = bodyLower.contains('start sip') ||
+             bodyLower.contains('start sips') ||
+             bodyLower.contains('start investing') ||
+             bodyLower.contains('invest from') ||
+@@ -289,42 +302,65 @@ void _runAutoHeal(List<TransactionModel> transactions, String userId, List<Categ
+             bodyLower.contains('if debited') ||
+             bodyLower.contains('use code: claim') ||
+             bodyLower.contains('open demat') ||
+-            bodyLower.contains('open trading account');
++            bodyLower.contains('open trading account') ||
++            bodyLower.contains('bit.ly/') ||
++            bodyLower.contains('dearclient') ||
++            bodyLower.contains('pleasecheck') ||
++            bodyLower.contains('check account details') ||
++            bodyLower.contains('regardsitisbl') ||
++            bodyLower.contains('itisbl');
+ 
+         final bool isPreDebitNotice = (bodyLower.contains('is due on') ||
+                 bodyLower.contains('due on') ||
+                 bodyLower.contains('ensure availability of fund')) &&
+             (bodyLower.contains('mandate debit') || bodyLower.contains('nach mandate'));
+ 
+-        if (isMarketingSpam || isPreDebitNotice) {
+-          debugPrint('[AutoHeal] Purging non-financial/promotional transaction ${tx.id} (${tx.categoryName}, ₹${tx.amount})');
+-          await FirebaseFirestore.instance
+-              .collection('users')
+-              .doc(userId)
+-              .collection('transactions')
+-              .doc(tx.id)
+-              .delete();
+-          continue; // Skip processing and omit from refMap
++        // Re-validate single SMS through SmsParserService so any newly added spam/anchor rules automatically heal old builds
++        final bool isRejectedByParser = !isMergedSelfTransferBody &&
++            SmsParserService.parseSms(rawBody, messageTimestamp: tx.date) == null;
++
++        if (isLegacySpam || isPreDebitNotice || isRejectedByParser) {
++          debugPrint('[AutoHeal] Purging non-financial/fake SMS transaction ${tx.id} (${tx.categoryName}, ₹${tx.amount})');
++          batch.delete(userTxCol.doc(tx.id));
++          batchOps++;
++          deletedTxIds.add(tx.id);
++          if (tx.smsHash != null && tx.smsHash!.isNotEmpty) {
++            await AutoSmsService.markHashDiscarded(tx.smsHash!);
++          }
++          continue;
+         }
+       }
+ 
+       String? r = tx.refNumber;
++      String? bankAcc = tx.bankAccount;
+       final Map<String, dynamic> updateData = {};
+ 
+-      // 1. Smart Retroactive Healer for Legacy Transactions
+-      if (r == null && tx.rawSmsBody != null && tx.rawSmsBody!.isNotEmpty) {
++      // 1. Smart Retroactive Healer for Legacy / Native-Receiver Transactions with empty or null refNumber / bankAccount
++      if ((r == null || r.trim().isEmpty) && tx.rawSmsBody != null && tx.rawSmsBody!.isNotEmpty) {
+         final newlyFoundRef = SmsParserService.extractReference(tx.rawSmsBody!);
+-        r = newlyFoundRef ?? '';
+-        updateData['refNumber'] = r;
+-        debugPrint('[AutoHeal] Migrated legacy tx ${tx.id}. Found ref: $newlyFoundRef');
++        if (newlyFoundRef != null && newlyFoundRef.isNotEmpty) {
++          r = newlyFoundRef;
++          updateData['refNumber'] = r;
++          debugPrint('[AutoHeal] Backfilled missing refNumber on tx ${tx.id}: $newlyFoundRef');
++        }
++      }
++
++      if ((bankAcc == null || bankAcc.trim().isEmpty) && tx.rawSmsBody != null && tx.rawSmsBody!.isNotEmpty) {
++        final newlyFoundBank = SmsParserService.extractBankAccount(tx.rawSmsBody!);
++        if (newlyFoundBank != null && newlyFoundBank.isNotEmpty) {
++          bankAcc = newlyFoundBank;
++          updateData['bankAccount'] = bankAcc;
++        }
+       }
+ 
+-      // 2. Smart Retroactive Categorizer for "Transfer" and "Transport" fallbacks
+-      if ((tx.categoryId == 'transfer' || tx.categoryId == 'transport') && tx.rawSmsBody != null) {
++      // 2. Smart Retroactive Categorizer for fallback categories ('transfer', 'transport', 'other', 'income')
++      if (const {'transfer', 'transport', 'other', 'income'}.contains(tx.categoryId) &&
++          tx.rawSmsBody != null &&
++          tx.rawSmsBody!.isNotEmpty &&
++          !tx.rawSmsBody!.contains('\n---\n')) {
+         final pendingSms = tx.toPendingSms();
+         final newCategory = PendingSmsNotifier.getSmartCategory(pendingSms, categories);
+-        
+-        // If the smart categorizer found a better match than the current category
++
+         if (newCategory.id != tx.categoryId) {
+           updateData['categoryId'] = newCategory.id;
+           updateData['categoryName'] = newCategory.name;
+@@ -335,7 +371,7 @@ void _runAutoHeal(List<TransactionModel> transactions, String userId, List<Categ
+       }
+ 
+       // 3. Retroactive Name Updater (e.g. Income -> Received)
+-      if (tx.categoryId == 'income' && tx.categoryName != 'Received') {
++      if (tx.categoryId == 'income' && tx.categoryName != 'Received' && !updateData.containsKey('categoryName')) {
+         updateData['categoryName'] = 'Received';
+         debugPrint('[AutoHeal] Upgraded categoryName for ${tx.id} from ${tx.categoryName} to Received');
+       }
+@@ -367,93 +403,157 @@ void _runAutoHeal(List<TransactionModel> transactions, String userId, List<Categ
+         }
+       }
+ 
+-      // Execute zero-cost batched update
+       if (updateData.isNotEmpty) {
+         updateData['updatedAt'] = FieldValue.serverTimestamp();
+-        await FirebaseFirestore.instance
+-            .collection('users')
+-            .doc(userId)
+-            .collection('transactions')
+-            .doc(tx.id)
+-            .update(updateData);
++        batch.update(userTxCol.doc(tx.id), updateData);
++        batchOps++;
+       }
+ 
++      final healedTx = TransactionModel(
++        id: tx.id,
++        amount: tx.amount,
++        description: tx.description,
++        categoryId: (updateData['categoryId'] as String?) ?? tx.categoryId,
++        categoryName: (updateData['categoryName'] as String?) ?? tx.categoryName,
++        iconCodePoint: (updateData['iconCodePoint'] as int?) ?? tx.iconCodePoint,
++        colorValue: (updateData['colorValue'] as int?) ?? tx.colorValue,
++        date: tx.date,
++        userId: tx.userId,
++        isExpense: (updateData['isExpense'] as bool?) ?? tx.isExpense,
++        isShared: tx.isShared,
++        splitWith: tx.splitWith,
++        splitAmounts: tx.splitAmounts,
++        groupId: tx.groupId,
++        paymentMode: tx.paymentMode,
++        smsHash: tx.smsHash,
++        merchantName: tx.merchantName,
++        bankAccount: bankAcc,
++        refNumber: r,
++        rawSmsBody: tx.rawSmsBody,
++      );
++
+       final cleanRef = r?.toLowerCase().trim();
+       if (cleanRef != null && cleanRef.isNotEmpty) {
+-        refMap.putIfAbsent(cleanRef, () => []).add(tx);
++        refMap.putIfAbsent(cleanRef, () => []).add(healedTx);
++      } else if (healedTx.rawSmsBody != null && healedTx.rawSmsBody!.trim().isNotEmpty) {
++        final dupKey = '${healedTx.amount.toStringAsFixed(2)}_${healedTx.isExpense}_${healedTx.rawSmsBody!.trim()}';
++        noRefDupMap.putIfAbsent(dupKey, () => []).add(healedTx);
+       }
+     }
+ 
++    // 5. Consolidate 2, 3, or N transactions sharing the same refNumber
+     for (final entry in refMap.entries) {
+       final list = entry.value;
+       if (list.length >= 2) {
+         final double firstAmount = list.first.amount;
+-        final matchingAmountList = list.where((t) => (t.amount - firstAmount).abs() < 0.01).toList();
++        final matchingAmountList = list
++            .where((t) => !deletedTxIds.contains(t.id) && (t.amount - firstAmount).abs() < 0.01)
++            .toList();
+ 
+         if (matchingAmountList.length >= 2) {
+-          // Sort by date (oldest first) so we keep the oldest one
+           matchingAmountList.sort((a, b) => a.date.compareTo(b.date));
+-          final t1 = matchingAmountList[0];
+-          final t2 = matchingAmountList[1];
+-
+-          if (t1.isExpense == t2.isExpense) {
+-            // DUPLICATE (Same Direction) -> Delete the newer one (t2)
+-            debugPrint('[AutoHeal] Deleting pure duplicate refNumber ${entry.key}: Keeping ${t1.id}, Deleting ${t2.id}');
+-            await FirebaseFirestore.instance
+-                .collection('users')
+-                .doc(userId)
+-                .collection('transactions')
+-                .doc(t2.id)
+-                .delete();
+-          } else {
+-            // SELF TRANSFER (Opposite Direction) -> Merge them
+-            final debitTx = t1.isExpense ? t1 : t2;
+-            final creditTx = t1.isExpense ? t2 : t1;
+ 
+-            final fromStr = (debitTx.bankAccount != null && debitTx.bankAccount!.isNotEmpty)
+-                ? debitTx.bankAccount!
++          // Case A: A self_transfer record ALREADY exists in this ref group -> delete all residual legs!
++          final existingSelfTx = matchingAmountList.where((t) => t.categoryId == 'self_transfer').firstOrNull;
++          if (existingSelfTx != null) {
++            for (final extra in matchingAmountList) {
++              if (extra.id != existingSelfTx.id) {
++                debugPrint('[AutoHeal] Deleting residual leg ${extra.id} (${extra.categoryName}) for existing self_transfer ${existingSelfTx.id} (ref: ${entry.key})');
++                batch.delete(userTxCol.doc(extra.id));
++                batchOps++;
++                deletedTxIds.add(extra.id);
++              }
++            }
++            continue;
++          }
++
++          // Case B: Both Debit and Credit legs exist (or different bank accounts) -> upgrade one to self_transfer & delete all others
++          final debitTx = matchingAmountList.where((t) => t.isExpense).firstOrNull;
++          final creditTx = matchingAmountList.where((t) => !t.isExpense).firstOrNull;
++          final firstBank = matchingAmountList.first.bankAccount?.toLowerCase().trim() ?? '';
++          final diffBankTx = firstBank.isNotEmpty
++              ? matchingAmountList.where((t) {
++                  final b = t.bankAccount?.toLowerCase().trim() ?? '';
++                  return b.isNotEmpty && b != firstBank;
++                }).firstOrNull
++              : null;
++
++          if ((debitTx != null && creditTx != null) || diffBankTx != null) {
++            final primaryTx = debitTx ?? matchingAmountList.first;
++            final counterpartTx = creditTx ?? diffBankTx!;
++
++            final fromStr = (primaryTx.bankAccount != null && primaryTx.bankAccount!.isNotEmpty)
++                ? primaryTx.bankAccount!
+                 : 'Account';
+-            final toStr = (creditTx.bankAccount != null && creditTx.bankAccount!.isNotEmpty)
+-                ? creditTx.bankAccount!
++            final toStr = (counterpartTx.bankAccount != null && counterpartTx.bankAccount!.isNotEmpty)
++                ? counterpartTx.bankAccount!
+                 : 'Account';
+             final selfTransferDesc = 'Self Transfer ($fromStr ➔ $toStr)';
+ 
+-            final raw1 = debitTx.rawSmsBody ?? '';
+-            final raw2 = creditTx.rawSmsBody ?? '';
+-            final mergedRaw = raw1.isNotEmpty && raw2.isNotEmpty && raw1 != raw2
++            final raw1 = primaryTx.rawSmsBody ?? '';
++            final raw2 = counterpartTx.rawSmsBody ?? '';
++            final mergedRaw = raw1.isNotEmpty && raw2.isNotEmpty && !raw1.contains(raw2)
+                 ? '$raw1\n---\n$raw2'
+                 : (raw1.isNotEmpty ? raw1 : raw2);
+ 
+-            debugPrint('[AutoHeal] Consolidating duplicate refNumber ${entry.key}: Upgrading ${debitTx.id} & deleting ${creditTx.id}');
++            debugPrint('[AutoHeal] Consolidating ${matchingAmountList.length} legs for refNumber ${entry.key} into Self Transfer ${primaryTx.id}');
+ 
+-            await FirebaseFirestore.instance
+-                .collection('users')
+-                .doc(userId)
+-                .collection('transactions')
+-                .doc(debitTx.id)
+-                .update({
++            batch.update(userTxCol.doc(primaryTx.id), {
+               'categoryId': 'self_transfer',
+               'categoryName': 'Self Transfer',
+               'iconCodePoint': Icons.sync_alt_rounded.codePoint,
+               'colorValue': const Color(0xFF607D8B).toARGB32(),
+               'description': selfTransferDesc,
+               'isExpense': true,
+-              'bankAccount': debitTx.bankAccount,
+-              'merchantName': creditTx.bankAccount ?? 'Self Transfer',
++              'bankAccount': primaryTx.bankAccount,
++              'merchantName': counterpartTx.bankAccount ?? 'Self Transfer',
+               'rawSmsBody': mergedRaw,
++              if (primaryTx.refNumber != null && primaryTx.refNumber!.isNotEmpty)
++                'refNumber': primaryTx.refNumber,
+               'updatedAt': FieldValue.serverTimestamp(),
+             });
++            batchOps++;
+ 
+-            await FirebaseFirestore.instance
+-                .collection('users')
+-                .doc(userId)
+-                .collection('transactions')
+-                .doc(creditTx.id)
+-                .delete();
++            for (final other in matchingAmountList) {
++              if (other.id != primaryTx.id) {
++                batch.delete(userTxCol.doc(other.id));
++                batchOps++;
++                deletedTxIds.add(other.id);
++              }
++            }
++          } else {
++            // Case C: Pure duplicates (same direction & same bank) -> keep oldest, delete all remaining
++            final keepTx = matchingAmountList.first;
++            for (final dup in matchingAmountList.skip(1)) {
++              debugPrint('[AutoHeal] Deleting pure duplicate refNumber ${entry.key}: Keeping ${keepTx.id}, Deleting ${dup.id}');
++              batch.delete(userTxCol.doc(dup.id));
++              batchOps++;
++              deletedTxIds.add(dup.id);
++            }
+           }
+         }
+       }
+     }
++
++    // 6. Deduplicate no-ref transactions that share identical amount, direction, and rawSmsBody
++    for (final entry in noRefDupMap.entries) {
++      final list = entry.value.where((t) => !deletedTxIds.contains(t.id)).toList();
++      if (list.length >= 2) {
++        list.sort((a, b) => a.date.compareTo(b.date));
++        final keepTx = list.first;
++        for (final dup in list.skip(1)) {
++          debugPrint('[AutoHeal] Deleting duplicate no-ref SMS transaction ${dup.id} (keeping ${keepTx.id})');
++          batch.delete(userTxCol.doc(dup.id));
++          batchOps++;
++          deletedTxIds.add(dup.id);
++        }
++      }
++    }
++
++    if (batchOps > 0) {
++      await batch.commit();
++      debugPrint('[AutoHeal] Committed $batchOps healing operations in 1 atomic batch.');
++    }
+   } catch (e) {
+     debugPrint('[AutoHeal] Error during duplicate ref reconciliation: $e');
+   } finally {
+@@ -1325,15 +1425,43 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
+     try {
+       final batch = _firestore.batch();
+       final userTxCol = _firestore.collection('users').doc(user.uid).collection('transactions');
++      int committedCount = 0;
+ 
+       for (final tx in transactions) {
++        final cleanHash = tx.smsHash?.trim() ?? '';
++        final cleanRef = tx.refNumber?.trim().toLowerCase() ?? '';
++        final inFlightRefKey = cleanRef.isNotEmpty ? '${cleanRef}_${tx.isExpense}' : '';
++
++        if (cleanHash.isNotEmpty && _inFlightSmsHashes.contains(cleanHash)) {
++          debugPrint('[TransactionViewModel] addTransactionsBatch skipped in-flight smsHash $cleanHash');
++          continue;
++        }
++        if (inFlightRefKey.isNotEmpty && _inFlightRefNumbers.contains(inFlightRefKey)) {
++          debugPrint('[TransactionViewModel] addTransactionsBatch skipped in-flight ref $inFlightRefKey');
++          continue;
++        }
++
++        if (cleanHash.isNotEmpty) {
++          _inFlightSmsHashes.add(cleanHash);
++          Future.delayed(const Duration(seconds: 30), () => _inFlightSmsHashes.remove(cleanHash));
++        }
++        if (inFlightRefKey.isNotEmpty) {
++          _inFlightRefNumbers.add(inFlightRefKey);
++          Future.delayed(const Duration(seconds: 30), () => _inFlightRefNumbers.remove(inFlightRefKey));
++        }
++
+         final docRef = userTxCol.doc();
+-        batch.set(docRef, tx.toMap());
++        final map = tx.toMap();
++        map['createdAt'] = FieldValue.serverTimestamp();
++        batch.set(docRef, map);
++        committedCount++;
+       }
+ 
+-      await batch.commit();
++      if (committedCount > 0) {
++        await batch.commit();
++      }
+       state = const AsyncValue.data(null);
+-      return transactions.length;
++      return committedCount;
+     } catch (e, stack) {
+       debugPrint('[TransactionViewModel] addTransactionsBatch error: $e');
+       state = AsyncValue.error(e, stack);
+@@ -1375,7 +1503,12 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
+         splitWith: (isShared && groupId != null) ? splitWith : null,
+         splitAmounts: (isShared && groupId != null) ? splitAmounts : null,
+         groupId: (isShared && groupId != null) ? groupId : null,
+-        paymentMode: paymentMode,
++        paymentMode: paymentMode ?? originalTransaction.paymentMode,
++        smsHash: originalTransaction.smsHash,
++        merchantName: originalTransaction.merchantName,
++        bankAccount: originalTransaction.bankAccount,
++        refNumber: originalTransaction.refNumber,
++        rawSmsBody: originalTransaction.rawSmsBody,
+       );
+ 
+       if (isShared && groupId != null) {
+diff --git a/test/sms_parser_test.dart b/test/sms_parser_test.dart
+index 74be917..f310c5c 100644
+--- a/test/sms_parser_test.dart
++++ b/test/sms_parser_test.dart
+@@ -841,6 +841,45 @@ A/c No **4447 Credited with Rs 15000--UPI/CR/624397651570/ARYAN SO SANJAY/PUNB/1
+       final adParsed = SmsParserService.parseSms(adSms, sender: 'APPREC');
+       expect(adParsed, isNull);
+     });
++
++    test('Canara Dr + PNB Cr ₹17,000 Self Transfer (Ref: 628706055263)', () {
++      const canaraSms =
++          'Dear Customer, Acct XXX934 Dr. INR 17,000.00 on 14/10/26 to ARYAN SO SAN; UPI: 628706055263; Bal INR 4,501.46.Not you?SMS BLOCKUPI to 9901771222-CanaraBank';
++      const pnbSms =
++          'Your a/c XX9975 is credited for INR 17000.00 on 14-10-26 16:20 through UPI.Available Bal INR 32355.15 (UPI Ref ID 628706055263).Download PNB ONE-PNB';
++
++      final canaraParsed = SmsParserService.parseSms(canaraSms, sender: 'CANBNK');
++      final pnbParsed = SmsParserService.parseSms(pnbSms, sender: 'PNBSMS');
++
++      expect(canaraParsed, isNotNull);
++      expect(pnbParsed, isNotNull);
++      expect(canaraParsed!.refNumber, '628706055263');
++      expect(pnbParsed!.refNumber, '628706055263');
++      expect(canaraParsed.id, 'hash_ref_628706055263_1700000_dr');
++      expect(pnbParsed.id, 'hash_ref_628706055263_1700000_cr');
++    });
++
++    test('Fake ITISBL Phishing SMS with bit.ly and 10-digit mobile number - MUST BE IGNORED', () {
++      const fakeItisblSms = '''DearClientCodepleasecheck Your account 9759147625
++Date:17/10
++Time:13:53
++received Rs.3675
++Balance Rs.5823
++Check account details bit.ly/4k01bPw RegardsITISBL''';
++
++      final parsed = SmsParserService.parseSms(fakeItisblSms, sender: 'VM-ITISBL');
++      expect(parsed, isNull);
++    });
++
++    test('Fake 4000 Credited Rummy / Wallet / Promotional Ads - MUST BE IGNORED', () {
++      const rummyAd = 'Congratulations! Rs. 4,000 credited to your Rummy wallet. Withdraw now!';
++      const genericPromoCredit = 'Rs. 4000 has been credited to your account! Claim now before midnight.';
++      const dltPromoSenderSms = 'Rs. 1,500 credited to your account XX1234.';
++
++      expect(SmsParserService.parseSms(rummyAd), isNull);
++      expect(SmsParserService.parseSms(genericPromoCredit), isNull);
++      expect(SmsParserService.parseSms(dltPromoSenderSms, sender: 'AD-OFFERS-P'), isNull);
++    });
+   });
+ }
+ 

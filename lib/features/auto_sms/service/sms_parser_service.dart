@@ -6,6 +6,10 @@ class SmsParserService {
   static ModelPendingSms? parseSms(String body, {String? sender, DateTime? messageTimestamp}) {
     if (body.isEmpty) return null;
 
+    if (_isSpamSender(sender)) {
+      return null;
+    }
+
     final lower = body.toLowerCase();
 
     // 1. Ignore OTPs, promotional, failed/declined transactions, requests
@@ -85,6 +89,25 @@ class SmsParserService {
     // 7. Extract Bank Account & Card Details
     final String? bankAccount = _extractBankAccount(body, sender);
 
+    // 7B. Structural Banking Anchor Verification for Credits:
+    // Blocks fake "Rs. 4,000 credited" / "received Rs.3675" ads that lack a bank/account/ref/VPA
+    if (!isExpense) {
+      final bool hasBankingAnchor = (bankAccount != null && bankAccount.isNotEmpty) ||
+          (refNo != null && refNo.isNotEmpty) ||
+          body.contains('@') ||
+          lower.contains('salary') ||
+          lower.contains('interest') ||
+          lower.contains('dividend') ||
+          lower.contains('refund') ||
+          lower.contains('cashback') ||
+          lower.contains('neft') ||
+          lower.contains('rtgs') ||
+          lower.contains('imps');
+      if (!hasBankingAnchor) {
+        return null;
+      }
+    }
+
     // 8. Generate Smart Title & Description
     final smartDetails = generateSmartDetails(vendorName, body, isExpense);
 
@@ -105,6 +128,33 @@ class SmsParserService {
       refNumber: refNo,
       smartTitle: smartDetails['title'],
     );
+  }
+
+  /// Checks if the SMS sender header is a promotional DLT header (-P), a personal mobile number, or known scam/gaming ID.
+  static bool _isSpamSender(String? sender) {
+    if (sender == null || sender.trim().isEmpty) return false;
+    final s = sender.trim();
+    final upper = s.toUpperCase();
+
+    // TRAI DLT Promotional category headers end with "-P" (e.g. "VM-RUMMY-P", "AD-LOANS-P")
+    if (RegExp(r'[\-\_]P$').hasMatch(upper)) return true;
+
+    // Personal 10-digit Indian mobile numbers (+91 / 91 / 10 digits)
+    if (RegExp(r'^(?:\+?91[\-\s]?)?[6-9]\d{9}$').hasMatch(s)) return true;
+
+    // Known scam / DLT template-abused / gaming sender tokens
+    if (upper.contains('ITISBL') ||
+        upper.contains('RUMMY') ||
+        upper.contains('DREAM11') ||
+        upper.contains('MY11') ||
+        upper.contains('WINZO') ||
+        upper.contains('ZUPEE') ||
+        upper.contains('POKER') ||
+        upper.contains('CASINO') ||
+        upper.contains('TEENP')) {
+      return true;
+    }
+    return false;
   }
 
   static bool _isSpamOrNonFinancial(String lower) {
@@ -314,6 +364,77 @@ class SmsParserService {
         lower.contains('scheduled for debit') ||
         RegExp(r'\b(?:rtgs|neft|imps|upi|transaction|payment|transfer)\s+(?:transaction\s+)?initiated\b', caseSensitive: false).hasMatch(lower) ||
         RegExp(r'\binitiated\s*:\s*(?:of\s*)?(?:rs\.?|inr\.?|₹)', caseSensitive: false).hasMatch(lower)) {
+      return true;
+    }
+
+    // 12. Phishing / Smishing Short Links, Template-Stuffed Scams (e.g. ITISBL) & Unmasked 10-Digit Mobile Account Spoofing
+    if (lower.contains('bit.ly/') ||
+        lower.contains('tinyurl.com/') ||
+        lower.contains('cutt.ly/') ||
+        lower.contains('is.gd/') ||
+        lower.contains('rb.gy/') ||
+        lower.contains('shorturl.at/') ||
+        lower.contains('v.gd/') ||
+        lower.contains('ow.ly/') ||
+        lower.contains('rebrand.ly/') ||
+        lower.contains('tiny.cc/') ||
+        lower.contains('ct3.io/') ||
+        lower.contains('t.me/') ||
+        lower.contains('wa.me/') ||
+        lower.contains('dearclient') ||
+        lower.contains('clientcode') ||
+        lower.contains('pleasecheck') ||
+        lower.contains('check account details') ||
+        lower.contains('regardsitisbl') ||
+        lower.contains('itisbl') ||
+        RegExp(r'\b(?:your\s+)?(?:a\/c|acct|account)\s*(?:no\.?)?[\s\:\-]*[6-9]\d{9}\b', caseSensitive: false).hasMatch(lower)) {
+      return true;
+    }
+
+    // 13. Gaming, Rummy, Fantasy, Wallet Bonus & Fake "4000 Credited" Ad Lures
+    if (lower.contains('rummy') ||
+        lower.contains('ludo') ||
+        lower.contains('fantasy') ||
+        lower.contains('dream11') ||
+        lower.contains('my11circle') ||
+        lower.contains('winzo') ||
+        lower.contains('zupee') ||
+        lower.contains('poker') ||
+        lower.contains('teen patti') ||
+        lower.contains('teenpatti') ||
+        lower.contains('casino') ||
+        lower.contains('jackpot') ||
+        lower.contains('spin & win') ||
+        lower.contains('spin and win') ||
+        lower.contains('winnings') ||
+        lower.contains('welcome bonus') ||
+        lower.contains('joining bonus') ||
+        lower.contains('signup bonus') ||
+        lower.contains('sign up bonus') ||
+        lower.contains('cash bonus') ||
+        lower.contains('wallet bonus') ||
+        lower.contains('bonus credited') ||
+        lower.contains('game wallet') ||
+        lower.contains('play now') ||
+        lower.contains('play & win') ||
+        lower.contains('play and win') ||
+        lower.contains('free cash') ||
+        lower.contains('gift voucher') ||
+        lower.contains('claim now') ||
+        lower.contains('claim your') ||
+        lower.contains('withdraw now') ||
+        lower.contains('redeem now') ||
+        lower.contains('collect now') ||
+        lower.contains('can be credited') ||
+        lower.contains('will be credited') ||
+        lower.contains('ready to be credited') ||
+        lower.contains('credited instantly') ||
+        lower.contains('get instant') ||
+        lower.contains('instant loan') ||
+        lower.contains('eligible for') ||
+        lower.contains('approved for') ||
+        RegExp(r'(?:up\s*to|upto|worth)\s*(?:rs\.?|inr\.?|₹)?\s*[\d,]+', caseSensitive: false).hasMatch(lower) ||
+        RegExp(r'(?:rs\.?|inr\.?|₹)?\s*[\d,]+(?:\.\d+)?\s*(?:has\s+been\s+|is\s+)?credited\s+(?:in|to)\s+(?:your\s+)?(?:wallet|rummy|game|bonus|app|play|fantasy|reward)', caseSensitive: false).hasMatch(lower)) {
       return true;
     }
 
@@ -883,6 +1004,9 @@ class SmsParserService {
     return 'hash_${cleanVendor}_${fallbackSnippet}_${amountInt}_$typeSuffix';
   }
 
+  static String? extractBankAccount(String body, [String? sender]) =>
+      _extractBankAccount(body, sender);
+
   static String? _extractBankAccount(String body, String? sender) {
     // 1. Detect Bank Name
     String bankName = '';
@@ -918,9 +1042,9 @@ class SmsParserService {
       }
     }
 
-    // 2. Extract Account / Card digits
+    // 2. Extract Account / Card digits (with negative lookahead (?!\d) so 10-digit phone numbers are rejected)
     final RegExp accRegex = RegExp(
-      r'(?:a\/c|acct|account|card)[\s\.\:\#\-]*(?:no\.?)?\s*([xX\*]*\d{3,6})',
+      r'(?:a\/c|acct|account|card)[\s\.\:\#\-]*(?:no\.?)?\s*([xX\*]+\d{3,6}|\d{3,6})(?!\d)',
       caseSensitive: false,
     );
     final match = accRegex.firstMatch(body);

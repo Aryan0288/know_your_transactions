@@ -25,6 +25,7 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
   static const String _prefsKey = 'pending_auto_sms_items';
   static bool _isSyncingInProgress = false;
   static bool _isSilentSyncRunning = false;
+  static bool _isProcessingPersonalItems = false;
 
   PendingSmsNotifier(this.ref) : super([]) {
     _loadFromPrefs();
@@ -43,7 +44,35 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
       final String? jsonStr = prefs.getString(_prefsKey);
       if (jsonStr != null && jsonStr.isNotEmpty) {
         final List<dynamic> list = jsonDecode(jsonStr);
-        state = list.map((item) => ModelPendingSms.fromMap(Map<String, dynamic>.from(item), item['id'])).toList();
+        final List<ModelPendingSms> normalized = [];
+        final Set<String> seenIds = {};
+
+        for (final rawItem in list) {
+          final map = Map<String, dynamic>.from(rawItem);
+          final fallbackItem = ModelPendingSms.fromMap(map, map['id']?.toString() ?? '');
+          // Re-parse through Dart SmsParserService so native SmsReceiver items get canonical Dart hashId, refNumber & spam filtering
+          if (fallbackItem.rawSmsBody.isNotEmpty) {
+            final reparsed = SmsParserService.parseSms(
+              fallbackItem.rawSmsBody,
+              sender: map['sender'] as String?,
+              messageTimestamp: fallbackItem.date,
+            );
+            if (reparsed == null) {
+              // Blocked by updated spam/scam filters
+              continue;
+            }
+            if (!seenIds.contains(reparsed.id)) {
+              seenIds.add(reparsed.id);
+              normalized.add(reparsed);
+            }
+          } else if (fallbackItem.id.isNotEmpty && !seenIds.contains(fallbackItem.id)) {
+            seenIds.add(fallbackItem.id);
+            normalized.add(fallbackItem);
+          }
+        }
+
+        state = normalized;
+        await _saveToPrefs();
         await _autoProcessPersonalItems();
       }
     } catch (_) {}
@@ -53,10 +82,13 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
   Future<void> reloadFromPrefs() => _loadFromPrefs();
 
   Future<void> _autoProcessPersonalItems() async {
-    if (state.isEmpty) return;
+    if (state.isEmpty || _isProcessingPersonalItems) return;
 
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
+
+    _isProcessingPersonalItems = true;
+    try {
 
     final itemsToProcess = List<ModelPendingSms>.from(state);
     final categories = ref.read(categoriesProvider).value ?? kDefaultCategories;
@@ -85,8 +117,9 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
       final creditItem = list.where((i) => !i.isExpense).firstOrNull;
 
       if (debitItem != null && creditItem != null) {
-        processedIds.add(debitItem.id);
-        processedIds.add(creditItem.id);
+        for (final grpItem in list) {
+          processedIds.add(grpItem.id);
+        }
 
         final fromStr = (debitItem.bankAccount != null && debitItem.bankAccount!.isNotEmpty)
             ? debitItem.bankAccount!
@@ -117,8 +150,7 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
             );
 
         if (success) {
-          await AutoSmsService.markHashSynced(debitItem.id);
-          await AutoSmsService.markHashSynced(creditItem.id);
+          await AutoSmsService.markHashesSynced(list.map((e) => e.id));
           debugPrint('[AutoSms] Successfully added paired Self Transfer: ₹${debitItem.amount} ($selfTransferDesc)');
         }
       }
@@ -132,6 +164,17 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
       if (cleanRef != null && cleanRef.isNotEmpty) {
         // Layer 1: In-Memory Live Stream Match (0ms Latency)
         final activeTransactions = ref.read(transactionsStreamProvider).value ?? [];
+        final alreadyMergedSelfTransfer = activeTransactions.any((t) =>
+            t.refNumber != null &&
+            t.refNumber!.toLowerCase().trim() == cleanRef &&
+            (t.amount - item.amount).abs() < 0.01 &&
+            t.categoryId == 'self_transfer');
+        if (alreadyMergedSelfTransfer) {
+          processedIds.add(item.id);
+          await AutoSmsService.markHashSynced(item.id);
+          continue;
+        }
+
         final inMemoryMatch = activeTransactions.where((t) {
           if (t.refNumber == null || t.refNumber!.isEmpty) return false;
           if (t.refNumber!.toLowerCase().trim() != cleanRef) return false;
@@ -208,6 +251,13 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
             final double existingAmount = (data['amount'] as num?)?.toDouble() ?? 0.0;
             final String existingCatId = data['categoryId'] as String? ?? '';
             final String? existingBankAccount = data['bankAccount'] as String?;
+
+            if (existingCatId == 'self_transfer' && (existingAmount - item.amount).abs() < 0.01) {
+              processedIds.add(item.id);
+              await AutoSmsService.markHashSynced(item.id);
+              merged = true;
+              break;
+            }
 
             // Branch 1: Classic Debit + Credit pair (opposite directions)
             // Branch 2: Same-direction (e.g. Credit + Credit) pair from different banks with same Ref ID
@@ -292,8 +342,11 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
       }
     }
 
-    state = state.where((item) => !processedIds.contains(item.id)).toList();
-    await _saveToPrefs();
+      state = state.where((item) => !processedIds.contains(item.id)).toList();
+      await _saveToPrefs();
+    } finally {
+      _isProcessingPersonalItems = false;
+    }
   }
 
   Future<void> _saveToPrefs() async {
@@ -412,6 +465,16 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
     if (cleanRef != null && cleanRef.isNotEmpty) {
       // Layer 1: In-Memory Live Stream Match (0ms Latency)
       final activeTransactions = ref.read(transactionsStreamProvider).value ?? [];
+      final alreadyMergedSelfTransfer = activeTransactions.any((t) =>
+          t.refNumber != null &&
+          t.refNumber!.toLowerCase().trim() == cleanRef &&
+          (t.amount - parsedSms.amount).abs() < 0.01 &&
+          t.categoryId == 'self_transfer');
+      if (alreadyMergedSelfTransfer) {
+        await AutoSmsService.markHashSynced(parsedSms.id);
+        return;
+      }
+
       final inMemoryMatch = activeTransactions.where((t) {
         if (t.refNumber == null || t.refNumber!.isEmpty) return false;
         if (t.refNumber!.toLowerCase().trim() != cleanRef) return false;
@@ -486,6 +549,11 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
           final double existingAmount = (data['amount'] as num?)?.toDouble() ?? 0.0;
           final String existingCatId = data['categoryId'] as String? ?? '';
           final String? existingBankAccount = data['bankAccount'] as String?;
+
+          if (existingCatId == 'self_transfer' && (existingAmount - parsedSms.amount).abs() < 0.01) {
+            await AutoSmsService.markHashSynced(parsedSms.id);
+            return;
+          }
 
           // Branch 1: Classic Debit + Credit pair (opposite directions)
           // Branch 2: Same-direction (e.g. Credit + Credit) pair from different banks with same Ref ID
@@ -681,8 +749,9 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
         final creditItem = list.where((i) => !i.isExpense).firstOrNull;
 
         if (debitItem != null && creditItem != null) {
-          pairedSmsIds.add(debitItem.id);
-          pairedSmsIds.add(creditItem.id);
+          for (final grpItem in list) {
+            pairedSmsIds.add(grpItem.id);
+          }
 
           // Check if already active in Firestore
           if (activeFirestoreHashes.contains(debitItem.id) ||
@@ -885,6 +954,9 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
       final isEnabled = prefs.getBool('auto_sms_enabled') ?? false;
       if (!isEnabled) return;
 
+      // Flush any pending native receiver items first before scanning inbox
+      await _loadFromPrefs();
+
       // Run one-time legacy build migration if not done yet
       await _migrateOldBuildTransactions();
 
@@ -966,8 +1038,9 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
         final creditItem = list.where((i) => !i.isExpense).firstOrNull;
 
         if (debitItem != null && creditItem != null) {
-          pairedSmsIds.add(debitItem.id);
-          pairedSmsIds.add(creditItem.id);
+          for (final grpItem in list) {
+            pairedSmsIds.add(grpItem.id);
+          }
 
           if (activeFirestoreHashes.contains(debitItem.id) ||
               activeFirestoreHashes.contains(creditItem.id) ||
@@ -1616,6 +1689,10 @@ class PendingSmsNotifier extends StateNotifier<List<ModelPendingSms>> {
           isShared: targetGroupId != null && targetGroupId.isNotEmpty,
           paymentMode: pendingItem.paymentMode,
           smsHash: pendingItem.id,
+          merchantName: pendingItem.merchantName ?? pendingItem.vendorName,
+          bankAccount: pendingItem.bankAccount,
+          refNumber: pendingItem.refNumber,
+          rawSmsBody: pendingItem.rawSmsBody,
         );
 
     // Mark hash as synced

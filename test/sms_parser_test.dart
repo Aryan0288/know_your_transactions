@@ -841,6 +841,45 @@ A/c No **4447 Credited with Rs 15000--UPI/CR/624397651570/ARYAN SO SANJAY/PUNB/1
       final adParsed = SmsParserService.parseSms(adSms, sender: 'APPREC');
       expect(adParsed, isNull);
     });
+
+    test('Canara Dr + PNB Cr ₹17,000 Self Transfer (Ref: 628706055263)', () {
+      const canaraSms =
+          'Dear Customer, Acct XXX934 Dr. INR 17,000.00 on 14/10/26 to ARYAN SO SAN; UPI: 628706055263; Bal INR 4,501.46.Not you?SMS BLOCKUPI to 9901771222-CanaraBank';
+      const pnbSms =
+          'Your a/c XX9975 is credited for INR 17000.00 on 14-10-26 16:20 through UPI.Available Bal INR 32355.15 (UPI Ref ID 628706055263).Download PNB ONE-PNB';
+
+      final canaraParsed = SmsParserService.parseSms(canaraSms, sender: 'CANBNK');
+      final pnbParsed = SmsParserService.parseSms(pnbSms, sender: 'PNBSMS');
+
+      expect(canaraParsed, isNotNull);
+      expect(pnbParsed, isNotNull);
+      expect(canaraParsed!.refNumber, '628706055263');
+      expect(pnbParsed!.refNumber, '628706055263');
+      expect(canaraParsed.id, 'hash_ref_628706055263_1700000_dr');
+      expect(pnbParsed.id, 'hash_ref_628706055263_1700000_cr');
+    });
+
+    test('Fake ITISBL Phishing SMS with bit.ly and 10-digit mobile number - MUST BE IGNORED', () {
+      const fakeItisblSms = '''DearClientCodepleasecheck Your account 9759147625
+Date:17/10
+Time:13:53
+received Rs.3675
+Balance Rs.5823
+Check account details bit.ly/4k01bPw RegardsITISBL''';
+
+      final parsed = SmsParserService.parseSms(fakeItisblSms, sender: 'VM-ITISBL');
+      expect(parsed, isNull);
+    });
+
+    test('Fake 4000 Credited Rummy / Wallet / Promotional Ads - MUST BE IGNORED', () {
+      const rummyAd = 'Congratulations! Rs. 4,000 credited to your Rummy wallet. Withdraw now!';
+      const genericPromoCredit = 'Rs. 4000 has been credited to your account! Claim now before midnight.';
+      const dltPromoSenderSms = 'Rs. 1,500 credited to your account XX1234.';
+
+      expect(SmsParserService.parseSms(rummyAd), isNull);
+      expect(SmsParserService.parseSms(genericPromoCredit), isNull);
+      expect(SmsParserService.parseSms(dltPromoSenderSms, sender: 'AD-OFFERS-P'), isNull);
+    });
   });
 }
 

@@ -271,12 +271,25 @@ void _runAutoHeal(List<TransactionModel> transactions, String userId, List<Categ
   _hasPendingHeal = false;
 
   try {
+    final userTxCol = FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('transactions');
+    final batch = FirebaseFirestore.instance.batch();
+    int batchOps = 0;
+
     final Map<String, List<TransactionModel>> refMap = {};
+    final Map<String, List<TransactionModel>> noRefDupMap = {};
+    final Set<String> deletedTxIds = {};
+
     for (final tx in transactions) {
-      // 0. Auto-Healer Purge: Remove falsely captured marketing/promotional SMS transactions or pre-debit notices
+      // 0. Auto-Healer Purge: Use SmsParserService as single source of truth to purge any fake/spam/scam SMS
       if (tx.rawSmsBody != null && tx.rawSmsBody!.isNotEmpty) {
-        final bodyLower = tx.rawSmsBody!.toLowerCase();
-        final bool isMarketingSpam = bodyLower.contains('start sip') ||
+        final rawBody = tx.rawSmsBody!;
+        final bodyLower = rawBody.toLowerCase();
+        final isMergedSelfTransferBody = rawBody.contains('\n---\n');
+
+        final bool isLegacySpam = bodyLower.contains('start sip') ||
             bodyLower.contains('start sips') ||
             bodyLower.contains('start investing') ||
             bodyLower.contains('invest from') ||
@@ -289,42 +302,65 @@ void _runAutoHeal(List<TransactionModel> transactions, String userId, List<Categ
             bodyLower.contains('if debited') ||
             bodyLower.contains('use code: claim') ||
             bodyLower.contains('open demat') ||
-            bodyLower.contains('open trading account');
+            bodyLower.contains('open trading account') ||
+            bodyLower.contains('bit.ly/') ||
+            bodyLower.contains('dearclient') ||
+            bodyLower.contains('pleasecheck') ||
+            bodyLower.contains('check account details') ||
+            bodyLower.contains('regardsitisbl') ||
+            bodyLower.contains('itisbl');
 
         final bool isPreDebitNotice = (bodyLower.contains('is due on') ||
                 bodyLower.contains('due on') ||
                 bodyLower.contains('ensure availability of fund')) &&
             (bodyLower.contains('mandate debit') || bodyLower.contains('nach mandate'));
 
-        if (isMarketingSpam || isPreDebitNotice) {
-          debugPrint('[AutoHeal] Purging non-financial/promotional transaction ${tx.id} (${tx.categoryName}, ₹${tx.amount})');
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(userId)
-              .collection('transactions')
-              .doc(tx.id)
-              .delete();
-          continue; // Skip processing and omit from refMap
+        // Re-validate single SMS through SmsParserService so any newly added spam/anchor rules automatically heal old builds
+        final bool isRejectedByParser = !isMergedSelfTransferBody &&
+            SmsParserService.parseSms(rawBody, messageTimestamp: tx.date) == null;
+
+        if (isLegacySpam || isPreDebitNotice || isRejectedByParser) {
+          debugPrint('[AutoHeal] Purging non-financial/fake SMS transaction ${tx.id} (${tx.categoryName}, ₹${tx.amount})');
+          batch.delete(userTxCol.doc(tx.id));
+          batchOps++;
+          deletedTxIds.add(tx.id);
+          if (tx.smsHash != null && tx.smsHash!.isNotEmpty) {
+            await AutoSmsService.markHashDiscarded(tx.smsHash!);
+          }
+          continue;
         }
       }
 
       String? r = tx.refNumber;
+      String? bankAcc = tx.bankAccount;
       final Map<String, dynamic> updateData = {};
 
-      // 1. Smart Retroactive Healer for Legacy Transactions
-      if (r == null && tx.rawSmsBody != null && tx.rawSmsBody!.isNotEmpty) {
+      // 1. Smart Retroactive Healer for Legacy / Native-Receiver Transactions with empty or null refNumber / bankAccount
+      if ((r == null || r.trim().isEmpty) && tx.rawSmsBody != null && tx.rawSmsBody!.isNotEmpty) {
         final newlyFoundRef = SmsParserService.extractReference(tx.rawSmsBody!);
-        r = newlyFoundRef ?? '';
-        updateData['refNumber'] = r;
-        debugPrint('[AutoHeal] Migrated legacy tx ${tx.id}. Found ref: $newlyFoundRef');
+        if (newlyFoundRef != null && newlyFoundRef.isNotEmpty) {
+          r = newlyFoundRef;
+          updateData['refNumber'] = r;
+          debugPrint('[AutoHeal] Backfilled missing refNumber on tx ${tx.id}: $newlyFoundRef');
+        }
       }
 
-      // 2. Smart Retroactive Categorizer for "Transfer" and "Transport" fallbacks
-      if ((tx.categoryId == 'transfer' || tx.categoryId == 'transport') && tx.rawSmsBody != null) {
+      if ((bankAcc == null || bankAcc.trim().isEmpty) && tx.rawSmsBody != null && tx.rawSmsBody!.isNotEmpty) {
+        final newlyFoundBank = SmsParserService.extractBankAccount(tx.rawSmsBody!);
+        if (newlyFoundBank != null && newlyFoundBank.isNotEmpty) {
+          bankAcc = newlyFoundBank;
+          updateData['bankAccount'] = bankAcc;
+        }
+      }
+
+      // 2. Smart Retroactive Categorizer for fallback categories ('transfer', 'transport', 'other', 'income')
+      if (const {'transfer', 'transport', 'other', 'income'}.contains(tx.categoryId) &&
+          tx.rawSmsBody != null &&
+          tx.rawSmsBody!.isNotEmpty &&
+          !tx.rawSmsBody!.contains('\n---\n')) {
         final pendingSms = tx.toPendingSms();
         final newCategory = PendingSmsNotifier.getSmartCategory(pendingSms, categories);
-        
-        // If the smart categorizer found a better match than the current category
+
         if (newCategory.id != tx.categoryId) {
           updateData['categoryId'] = newCategory.id;
           updateData['categoryName'] = newCategory.name;
@@ -335,7 +371,7 @@ void _runAutoHeal(List<TransactionModel> transactions, String userId, List<Categ
       }
 
       // 3. Retroactive Name Updater (e.g. Income -> Received)
-      if (tx.categoryId == 'income' && tx.categoryName != 'Received') {
+      if (tx.categoryId == 'income' && tx.categoryName != 'Received' && !updateData.containsKey('categoryName')) {
         updateData['categoryName'] = 'Received';
         debugPrint('[AutoHeal] Upgraded categoryName for ${tx.id} from ${tx.categoryName} to Received');
       }
@@ -367,92 +403,156 @@ void _runAutoHeal(List<TransactionModel> transactions, String userId, List<Categ
         }
       }
 
-      // Execute zero-cost batched update
       if (updateData.isNotEmpty) {
         updateData['updatedAt'] = FieldValue.serverTimestamp();
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .collection('transactions')
-            .doc(tx.id)
-            .update(updateData);
+        batch.update(userTxCol.doc(tx.id), updateData);
+        batchOps++;
       }
+
+      final healedTx = TransactionModel(
+        id: tx.id,
+        amount: tx.amount,
+        description: tx.description,
+        categoryId: (updateData['categoryId'] as String?) ?? tx.categoryId,
+        categoryName: (updateData['categoryName'] as String?) ?? tx.categoryName,
+        iconCodePoint: (updateData['iconCodePoint'] as int?) ?? tx.iconCodePoint,
+        colorValue: (updateData['colorValue'] as int?) ?? tx.colorValue,
+        date: tx.date,
+        userId: tx.userId,
+        isExpense: (updateData['isExpense'] as bool?) ?? tx.isExpense,
+        isShared: tx.isShared,
+        splitWith: tx.splitWith,
+        splitAmounts: tx.splitAmounts,
+        groupId: tx.groupId,
+        paymentMode: tx.paymentMode,
+        smsHash: tx.smsHash,
+        merchantName: tx.merchantName,
+        bankAccount: bankAcc,
+        refNumber: r,
+        rawSmsBody: tx.rawSmsBody,
+      );
 
       final cleanRef = r?.toLowerCase().trim();
       if (cleanRef != null && cleanRef.isNotEmpty) {
-        refMap.putIfAbsent(cleanRef, () => []).add(tx);
+        refMap.putIfAbsent(cleanRef, () => []).add(healedTx);
+      } else if (healedTx.rawSmsBody != null && healedTx.rawSmsBody!.trim().isNotEmpty) {
+        final dupKey = '${healedTx.amount.toStringAsFixed(2)}_${healedTx.isExpense}_${healedTx.rawSmsBody!.trim()}';
+        noRefDupMap.putIfAbsent(dupKey, () => []).add(healedTx);
       }
     }
 
+    // 5. Consolidate 2, 3, or N transactions sharing the same refNumber
     for (final entry in refMap.entries) {
       final list = entry.value;
       if (list.length >= 2) {
         final double firstAmount = list.first.amount;
-        final matchingAmountList = list.where((t) => (t.amount - firstAmount).abs() < 0.01).toList();
+        final matchingAmountList = list
+            .where((t) => !deletedTxIds.contains(t.id) && (t.amount - firstAmount).abs() < 0.01)
+            .toList();
 
         if (matchingAmountList.length >= 2) {
-          // Sort by date (oldest first) so we keep the oldest one
           matchingAmountList.sort((a, b) => a.date.compareTo(b.date));
-          final t1 = matchingAmountList[0];
-          final t2 = matchingAmountList[1];
 
-          if (t1.isExpense == t2.isExpense) {
-            // DUPLICATE (Same Direction) -> Delete the newer one (t2)
-            debugPrint('[AutoHeal] Deleting pure duplicate refNumber ${entry.key}: Keeping ${t1.id}, Deleting ${t2.id}');
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(userId)
-                .collection('transactions')
-                .doc(t2.id)
-                .delete();
-          } else {
-            // SELF TRANSFER (Opposite Direction) -> Merge them
-            final debitTx = t1.isExpense ? t1 : t2;
-            final creditTx = t1.isExpense ? t2 : t1;
+          // Case A: A self_transfer record ALREADY exists in this ref group -> delete all residual legs!
+          final existingSelfTx = matchingAmountList.where((t) => t.categoryId == 'self_transfer').firstOrNull;
+          if (existingSelfTx != null) {
+            for (final extra in matchingAmountList) {
+              if (extra.id != existingSelfTx.id) {
+                debugPrint('[AutoHeal] Deleting residual leg ${extra.id} (${extra.categoryName}) for existing self_transfer ${existingSelfTx.id} (ref: ${entry.key})');
+                batch.delete(userTxCol.doc(extra.id));
+                batchOps++;
+                deletedTxIds.add(extra.id);
+              }
+            }
+            continue;
+          }
 
-            final fromStr = (debitTx.bankAccount != null && debitTx.bankAccount!.isNotEmpty)
-                ? debitTx.bankAccount!
+          // Case B: Both Debit and Credit legs exist (or different bank accounts) -> upgrade one to self_transfer & delete all others
+          final debitTx = matchingAmountList.where((t) => t.isExpense).firstOrNull;
+          final creditTx = matchingAmountList.where((t) => !t.isExpense).firstOrNull;
+          final firstBank = matchingAmountList.first.bankAccount?.toLowerCase().trim() ?? '';
+          final diffBankTx = firstBank.isNotEmpty
+              ? matchingAmountList.where((t) {
+                  final b = t.bankAccount?.toLowerCase().trim() ?? '';
+                  return b.isNotEmpty && b != firstBank;
+                }).firstOrNull
+              : null;
+
+          if ((debitTx != null && creditTx != null) || diffBankTx != null) {
+            final primaryTx = debitTx ?? matchingAmountList.first;
+            final counterpartTx = creditTx ?? diffBankTx!;
+
+            final fromStr = (primaryTx.bankAccount != null && primaryTx.bankAccount!.isNotEmpty)
+                ? primaryTx.bankAccount!
                 : 'Account';
-            final toStr = (creditTx.bankAccount != null && creditTx.bankAccount!.isNotEmpty)
-                ? creditTx.bankAccount!
+            final toStr = (counterpartTx.bankAccount != null && counterpartTx.bankAccount!.isNotEmpty)
+                ? counterpartTx.bankAccount!
                 : 'Account';
             final selfTransferDesc = 'Self Transfer ($fromStr ➔ $toStr)';
 
-            final raw1 = debitTx.rawSmsBody ?? '';
-            final raw2 = creditTx.rawSmsBody ?? '';
-            final mergedRaw = raw1.isNotEmpty && raw2.isNotEmpty && raw1 != raw2
+            final raw1 = primaryTx.rawSmsBody ?? '';
+            final raw2 = counterpartTx.rawSmsBody ?? '';
+            final mergedRaw = raw1.isNotEmpty && raw2.isNotEmpty && !raw1.contains(raw2)
                 ? '$raw1\n---\n$raw2'
                 : (raw1.isNotEmpty ? raw1 : raw2);
 
-            debugPrint('[AutoHeal] Consolidating duplicate refNumber ${entry.key}: Upgrading ${debitTx.id} & deleting ${creditTx.id}');
+            debugPrint('[AutoHeal] Consolidating ${matchingAmountList.length} legs for refNumber ${entry.key} into Self Transfer ${primaryTx.id}');
 
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(userId)
-                .collection('transactions')
-                .doc(debitTx.id)
-                .update({
+            batch.update(userTxCol.doc(primaryTx.id), {
               'categoryId': 'self_transfer',
               'categoryName': 'Self Transfer',
               'iconCodePoint': Icons.sync_alt_rounded.codePoint,
               'colorValue': const Color(0xFF607D8B).toARGB32(),
               'description': selfTransferDesc,
               'isExpense': true,
-              'bankAccount': debitTx.bankAccount,
-              'merchantName': creditTx.bankAccount ?? 'Self Transfer',
+              'bankAccount': primaryTx.bankAccount,
+              'merchantName': counterpartTx.bankAccount ?? 'Self Transfer',
               'rawSmsBody': mergedRaw,
+              if (primaryTx.refNumber != null && primaryTx.refNumber!.isNotEmpty)
+                'refNumber': primaryTx.refNumber,
               'updatedAt': FieldValue.serverTimestamp(),
             });
+            batchOps++;
 
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(userId)
-                .collection('transactions')
-                .doc(creditTx.id)
-                .delete();
+            for (final other in matchingAmountList) {
+              if (other.id != primaryTx.id) {
+                batch.delete(userTxCol.doc(other.id));
+                batchOps++;
+                deletedTxIds.add(other.id);
+              }
+            }
+          } else {
+            // Case C: Pure duplicates (same direction & same bank) -> keep oldest, delete all remaining
+            final keepTx = matchingAmountList.first;
+            for (final dup in matchingAmountList.skip(1)) {
+              debugPrint('[AutoHeal] Deleting pure duplicate refNumber ${entry.key}: Keeping ${keepTx.id}, Deleting ${dup.id}');
+              batch.delete(userTxCol.doc(dup.id));
+              batchOps++;
+              deletedTxIds.add(dup.id);
+            }
           }
         }
       }
+    }
+
+    // 6. Deduplicate no-ref transactions that share identical amount, direction, and rawSmsBody
+    for (final entry in noRefDupMap.entries) {
+      final list = entry.value.where((t) => !deletedTxIds.contains(t.id)).toList();
+      if (list.length >= 2) {
+        list.sort((a, b) => a.date.compareTo(b.date));
+        final keepTx = list.first;
+        for (final dup in list.skip(1)) {
+          debugPrint('[AutoHeal] Deleting duplicate no-ref SMS transaction ${dup.id} (keeping ${keepTx.id})');
+          batch.delete(userTxCol.doc(dup.id));
+          batchOps++;
+          deletedTxIds.add(dup.id);
+        }
+      }
+    }
+
+    if (batchOps > 0) {
+      await batch.commit();
+      debugPrint('[AutoHeal] Committed $batchOps healing operations in 1 atomic batch.');
     }
   } catch (e) {
     debugPrint('[AutoHeal] Error during duplicate ref reconciliation: $e');
@@ -1325,15 +1425,43 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
     try {
       final batch = _firestore.batch();
       final userTxCol = _firestore.collection('users').doc(user.uid).collection('transactions');
+      int committedCount = 0;
 
       for (final tx in transactions) {
+        final cleanHash = tx.smsHash?.trim() ?? '';
+        final cleanRef = tx.refNumber?.trim().toLowerCase() ?? '';
+        final inFlightRefKey = cleanRef.isNotEmpty ? '${cleanRef}_${tx.isExpense}' : '';
+
+        if (cleanHash.isNotEmpty && _inFlightSmsHashes.contains(cleanHash)) {
+          debugPrint('[TransactionViewModel] addTransactionsBatch skipped in-flight smsHash $cleanHash');
+          continue;
+        }
+        if (inFlightRefKey.isNotEmpty && _inFlightRefNumbers.contains(inFlightRefKey)) {
+          debugPrint('[TransactionViewModel] addTransactionsBatch skipped in-flight ref $inFlightRefKey');
+          continue;
+        }
+
+        if (cleanHash.isNotEmpty) {
+          _inFlightSmsHashes.add(cleanHash);
+          Future.delayed(const Duration(seconds: 30), () => _inFlightSmsHashes.remove(cleanHash));
+        }
+        if (inFlightRefKey.isNotEmpty) {
+          _inFlightRefNumbers.add(inFlightRefKey);
+          Future.delayed(const Duration(seconds: 30), () => _inFlightRefNumbers.remove(inFlightRefKey));
+        }
+
         final docRef = userTxCol.doc();
-        batch.set(docRef, tx.toMap());
+        final map = tx.toMap();
+        map['createdAt'] = FieldValue.serverTimestamp();
+        batch.set(docRef, map);
+        committedCount++;
       }
 
-      await batch.commit();
+      if (committedCount > 0) {
+        await batch.commit();
+      }
       state = const AsyncValue.data(null);
-      return transactions.length;
+      return committedCount;
     } catch (e, stack) {
       debugPrint('[TransactionViewModel] addTransactionsBatch error: $e');
       state = AsyncValue.error(e, stack);
@@ -1375,7 +1503,12 @@ class TransactionViewModel extends StateNotifier<AsyncValue<void>> {
         splitWith: (isShared && groupId != null) ? splitWith : null,
         splitAmounts: (isShared && groupId != null) ? splitAmounts : null,
         groupId: (isShared && groupId != null) ? groupId : null,
-        paymentMode: paymentMode,
+        paymentMode: paymentMode ?? originalTransaction.paymentMode,
+        smsHash: originalTransaction.smsHash,
+        merchantName: originalTransaction.merchantName,
+        bankAccount: originalTransaction.bankAccount,
+        refNumber: originalTransaction.refNumber,
+        rawSmsBody: originalTransaction.rawSmsBody,
       );
 
       if (isShared && groupId != null) {

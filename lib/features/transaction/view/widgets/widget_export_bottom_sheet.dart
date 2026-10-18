@@ -315,9 +315,9 @@ class ExportBottomSheet extends ConsumerWidget {
 
                 // C. Type filter
                 if (transactionType == 'expense') {
-                  filtered = filtered.where((t) => t.isExpense).toList();
+                  filtered = filtered.where((t) => t.isExpense && t.categoryId != 'self_transfer').toList();
                 } else if (transactionType == 'income') {
-                  filtered = filtered.where((t) => !t.isExpense).toList();
+                  filtered = filtered.where((t) => !t.isExpense && t.categoryId != 'self_transfer').toList();
                 }
 
                 if (filtered.isEmpty) {
